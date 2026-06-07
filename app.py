@@ -438,23 +438,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# CONSTANTS  — update SUPERIORS with Anulach Fashion contacts
+# CONSTANTS
 # ============================================================
-SUPERIORS = {
-    "Jaya Tahilramani":  "jaya@anulachfashion.com",
-    "Sandip Gawankar":   "sandip@anulachfashion.com",
-    "Tariq Patel":       "tariq@anulachfashion.com",
-    "Sarath Kumar":      "sarath@anulachfashion.com",
-    "Rajeev Thakur":     "rajeev@anulachfashion.com",
-    "Ayushi Jain":       "ayushi@anulachfashion.com",
-    "Akshaya Shinde":    "akshaya@anulachfashion.com",
-    "Vitika Mehta":      "vitika@anulachfashion.com",
-    "Mohammed Tahir":    "tahir@anulachfashion.com",
-    "Hr":                "hr@anulachfashion.com",
-    "Krishna Yadav":     "krishna@anulachfashion.com",
-    "Manish Gupta":      "manish@anulachfashion.com",
-    "Shantanu Shinde":   "shantanu@anulachfashion.com",
-}
+# All leave approvals go directly to HR
+HR_NAME  = "Hr"
+HR_EMAIL = "hrvolarfashion@gmail.com"
 
 DEPARTMENTS = [
     "Accounts and Finance", "Administration", "Business Development", "Content",
@@ -477,8 +465,7 @@ if "reset_form_tab2" not in st.session_state: st.session_state.reset_form_tab2 =
 if "form_data_tab1" not in st.session_state:
     st.session_state.form_data_tab1 = {
         "employee_name": "", "employee_code": "", "employee_email": "",
-        "department": "Select Department", "purpose": "",
-        "superior_name": "Select Manager", "is_cluster": False,
+        "department": "Select Department", "purpose": "", "is_cluster": False,
     }
 if "form_data_tab2" not in st.session_state:
     st.session_state.form_data_tab2 = {"approval_password": "", "action": "Select Decision"}
@@ -1456,8 +1443,7 @@ with tab1:
     if st.session_state.reset_form_tab1:
         st.session_state.form_data_tab1 = {
             "employee_name": "", "employee_code": "", "employee_email": "",
-            "department": "Select Department", "purpose": "",
-            "superior_name": "Select Manager", "is_cluster": False,
+            "department": "Select Department", "purpose": "", "is_cluster": False,
         }
         st.session_state.clusters = [{
             "cluster_number": 1, "leave_type": "Select Type",
@@ -1668,11 +1654,6 @@ with tab1:
         height=120, key="purpose_textarea",
     )
 
-    superior_name = st.selectbox(
-        "Reporting Manager or Team Leader",
-        ["Select Manager"] + list(SUPERIORS.keys()),
-        index=0, key="superior_select",
-    )
 
     # ── submit button ────────────────────────────────────────
     _, submit_col, _ = st.columns([1, 2, 1])
@@ -1697,8 +1678,7 @@ with tab1:
             else:
                 errors = []
                 if not all([employee_name, employee_code, employee_email,
-                             department != "Select Department", purpose,
-                             superior_name != "Select Manager"]):
+                             department != "Select Department", purpose]):
                     errors.append("Please complete all required fields")
                 if employee_email and ("@" not in employee_email or "." not in employee_email):
                     errors.append("Please enter a valid email address")
@@ -1717,7 +1697,8 @@ with tab1:
                 else:
                     with st.spinner("Submitting your application…"):
                         submission_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        superior_email  = SUPERIORS[superior_name]
+                        superior_name   = HR_NAME
+                        superior_email  = HR_EMAIL
                         sheet = setup_google_sheets()
                         if sheet:
                             try:
@@ -1809,8 +1790,8 @@ with tab1:
                                                 Manual Approval Process
                                             </div>
                                             <p style="color:#718096;margin-bottom:1.5rem;">
-                                                Please share these approval codes with your manager
-                                                <strong>{superior_name}</strong>:
+                                                Please share these approval codes with
+                                                <strong>HR (hrvolarfashion@gmail.com)</strong>:
                                             </p>
                                         </div>""", unsafe_allow_html=True)
                                     for i, cluster in enumerate(st.session_state.clusters):
