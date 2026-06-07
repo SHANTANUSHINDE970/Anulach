@@ -1,0 +1,2000 @@
+import streamlit as st
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
+import time
+import secrets
+import string
+import traceback
+import ssl
+from email.utils import formataddr
+import uuid
+import hashlib
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
+st.set_page_config(
+    page_title="ANULACH FASHION - Leave Management",
+    page_icon="\u2728",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# ============================================================
+# CSS
+# ============================================================
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap');
+
+    :root {
+        --primary-color: #673ab7;
+        --secondary-color: #9c27b0;
+        --accent-color: #2196f3;
+        --success-color: #28a745;
+        --warning-color: #ff9800;
+        --danger-color: #dc3545;
+        --text-primary: #1a1a1a;
+        --text-secondary: #4a5568;
+        --text-light: #718096;
+        --bg-primary: #ffffff;
+        --bg-secondary: #f8f9ff;
+        --bg-tertiary: #f5f7fa;
+        --border-color: #e2e8f0;
+        --card-bg: #ffffff;
+        --input-bg: #fafbfc;
+        --shadow-color: rgba(103, 58, 183, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --primary-color: #9c6bff;
+            --secondary-color: #d179ff;
+            --accent-color: #64b5f6;
+            --success-color: #4caf50;
+            --warning-color: #ffb74d;
+            --danger-color: #f44336;
+            --text-primary: #ffffff;
+            --text-secondary: #cbd5e0;
+            --text-light: #a0aec0;
+            --bg-primary: #1a202c;
+            --bg-secondary: #2d3748;
+            --bg-tertiary: #4a5568;
+            --border-color: #4a5568;
+            --card-bg: #2d3748;
+            --input-bg: #4a5568;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+        }
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .stApp { background-color: var(--bg-primary) !important; }
+        .main  { background-color: var(--bg-primary) !important; }
+        .stTextInput input,
+        .stSelectbox select,
+        .stTextArea textarea,
+        .stDateInput input,
+        .stNumberInput input {
+            color: var(--text-primary) !important;
+            background-color: var(--input-bg) !important;
+            border-color: var(--border-color) !important;
+        }
+        .stTextInput label,
+        .stSelectbox label,
+        .stTextArea label,
+        .stDateInput label,
+        .stNumberInput label { color: var(--text-secondary) !important; }
+        .stTextInput input::placeholder,
+        .stTextArea textarea::placeholder {
+            color: var(--text-light) !important;
+            opacity: 0.7;
+        }
+    }
+
+    * { font-family: 'Inter', sans-serif; color: var(--text-primary); }
+
+    .main {
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        min-height: 100vh;
+    }
+
+    .stApp {
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        background-attachment: fixed;
+    }
+
+    h1 {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        font-size: 3.2rem;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+        font-family: 'Playfair Display', serif;
+        letter-spacing: -0.5px;
+    }
+
+    h2 {
+        color: var(--text-light);
+        text-align: center;
+        font-size: 1.6rem;
+        margin-bottom: 3rem;
+        font-weight: 400;
+        font-family: 'Inter', sans-serif;
+        opacity: 0.9;
+    }
+
+    h3 {
+        color: var(--text-secondary);
+        font-size: 1.4rem;
+        margin-top: 2.5rem;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        position: relative;
+        padding-bottom: 10px;
+    }
+
+    h3:after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0;
+        width: 60px; height: 3px;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        border-radius: 2px;
+    }
+
+    .stButton>button {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        border: none;
+        padding: 1rem 3rem;
+        font-size: 1.1rem;
+        border-radius: 12px;
+        font-weight: 600;
+        width: 100%;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 8px 25px rgba(103, 58, 183, 0.25);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 35px rgba(103, 58, 183, 0.35);
+    }
+
+    .stTextInput>div>div>input {
+        color: var(--text-primary) !important;
+        background-color: var(--input-bg) !important;
+        border: 2px solid var(--border-color) !important;
+        border-radius: 12px;
+        padding: 0.875rem 1rem !important;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .stSelectbox>div>div>select {
+        color: var(--text-primary) !important;
+        background-color: var(--input-bg) !important;
+        border: 2px solid var(--border-color) !important;
+        border-radius: 12px;
+        padding: 0.875rem 1rem !important;
+        font-size: 1rem;
+    }
+
+    .stTextArea>div>div>textarea {
+        color: var(--text-primary) !important;
+        background-color: var(--input-bg) !important;
+        border: 2px solid var(--border-color) !important;
+        border-radius: 12px;
+        padding: 0.875rem 1rem !important;
+        font-size: 1rem;
+    }
+
+    .stDateInput>div>div>input {
+        color: var(--text-primary) !important;
+        background-color: var(--input-bg) !important;
+        border: 2px solid var(--border-color) !important;
+        border-radius: 12px;
+        padding: 0.875rem 1rem !important;
+        font-size: 1rem;
+    }
+
+    .stTextInput>div>div>input:focus,
+    .stTextArea>div>div>textarea:focus,
+    .stDateInput>div>div>input:focus {
+        border-color: var(--primary-color) !important;
+        box-shadow: 0 0 0 4px rgba(103, 58, 183, 0.1) !important;
+        background: var(--card-bg) !important;
+        outline: none !important;
+    }
+
+    .stTextInput>div>label,
+    .stSelectbox>div>label,
+    .stTextArea>div>label,
+    .stDateInput>div>label {
+        color: var(--text-secondary) !important;
+        font-weight: 600 !important;
+    }
+
+    p, span, div, li { color: var(--text-primary); }
+
+    .success-message {
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        border-left: 4px solid var(--success-color);
+        color: #155724;
+        padding: 1.75rem;
+        border-radius: 16px;
+        text-align: center;
+        font-weight: 500;
+        margin: 2rem 0;
+        box-shadow: 0 10px 30px rgba(40, 167, 69, 0.1);
+        animation: slideIn 0.5s ease-out;
+    }
+
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .error-message {
+        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+        border-left: 4px solid var(--danger-color);
+        color: #721c24;
+        padding: 1.75rem;
+        border-radius: 16px;
+        text-align: center;
+        font-weight: 500;
+        margin: 2rem 0;
+        box-shadow: 0 10px 30px rgba(220, 53, 69, 0.1);
+    }
+
+    .info-box {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        border-left: 4px solid var(--accent-color);
+        color: #0d47a1;
+        padding: 1.75rem;
+        border-radius: 16px;
+        margin: 2rem 0;
+        box-shadow: 0 10px 30px rgba(33, 150, 243, 0.1);
+    }
+
+    .thumbsup-box {
+        background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        border-left: 4px solid #4caf50;
+        color: #2e7d32;
+        padding: 1.75rem;
+        border-radius: 16px;
+        margin: 2rem 0;
+        box-shadow: 0 10px 30px rgba(76, 175, 80, 0.1);
+        text-align: center;
+    }
+
+    .metric-card {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        padding: 1.5rem;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 8px 20px rgba(156, 39, 176, 0.1);
+        border: 1px solid rgba(156, 39, 176, 0.1);
+    }
+
+    .cluster-section {
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+        border: 2px solid #3b82f6;
+        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+    }
+
+    .cluster-header h3 { color: #ffffff !important; margin: 0; }
+    .cluster-header p  { color: #dbeafe !important; margin: 5px 0 0 0; font-size: 0.95rem; }
+
+    label {
+        font-weight: 600 !important;
+        color: var(--text-secondary) !important;
+        font-size: 0.95rem !important;
+        margin-bottom: 0.5rem !important;
+        display: block;
+    }
+
+    .footer {
+        text-align: center;
+        color: var(--text-light);
+        padding: 3rem 2rem;
+        margin-top: 4rem;
+        position: relative;
+    }
+
+    .footer:before {
+        content: '';
+        position: absolute;
+        top: 0; left: 50%;
+        transform: translateX(-50%);
+        width: 200px; height: 2px;
+        background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+    }
+
+    #MainMenu {visibility: hidden;}
+    footer      {visibility: hidden;}
+    header      {visibility: hidden;}
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 12px;
+        background: var(--card-bg);
+        padding: 12px;
+        border-radius: 16px;
+        border: 1px solid rgba(103, 58, 183, 0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background: var(--card-bg);
+        border-radius: 12px;
+        color: var(--text-light);
+        font-weight: 500;
+        padding: 12px 28px;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        border-color: var(--primary-color);
+        box-shadow: 0 4px 12px rgba(103, 58, 183, 0.2);
+    }
+
+    .company-header {
+        text-align: center;
+        margin-bottom: 3rem;
+        padding: 2rem;
+        background: var(--card-bg);
+        border-radius: 24px;
+        box-shadow: 0 15px 40px rgba(103, 58, 183, 0.08);
+        border: 1px solid rgba(103, 58, 183, 0.1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .company-header:before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--accent-color));
+    }
+
+    .icon-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px; height: 40px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        margin-right: 12px;
+        font-size: 1.2rem;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--border-color);
+    }
+
+    .floating-element { animation: float 6s ease-in-out infinite; }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50%       { transform: translateY(-10px); }
+    }
+
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-tertiary); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        border-radius: 4px;
+    }
+
+    .thumbsup-emoji {
+        font-size: 3rem;
+        animation: thumbsupAnimation 2s ease-in-out infinite;
+    }
+
+    @keyframes thumbsupAnimation {
+        0%, 100% { transform: scale(1) rotate(0deg); }
+        25%       { transform: scale(1.1) rotate(-5deg); }
+        50%       { transform: scale(1.2) rotate(5deg); }
+        75%       { transform: scale(1.1) rotate(-5deg); }
+    }
+
+    .debug-log {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 10px;
+        margin: 10px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        section[data-testid="stSidebar"] { background-color: var(--bg-secondary) !important; }
+        section[data-testid="stSidebar"] * { color: var(--text-primary) !important; }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ============================================================
+# CONSTANTS  — update SUPERIORS with Anulach Fashion contacts
+# ============================================================
+SUPERIORS = {
+    "Jaya Tahilramani":  "jaya@anulachfashion.com",
+    "Sandip Gawankar":   "sandip@anulachfashion.com",
+    "Tariq Patel":       "tariq@anulachfashion.com",
+    "Sarath Kumar":      "sarath@anulachfashion.com",
+    "Rajeev Thakur":     "rajeev@anulachfashion.com",
+    "Ayushi Jain":       "ayushi@anulachfashion.com",
+    "Akshaya Shinde":    "akshaya@anulachfashion.com",
+    "Vitika Mehta":      "vitika@anulachfashion.com",
+    "Mohammed Tahir":    "tahir@anulachfashion.com",
+    "Hr":                "hr@anulachfashion.com",
+    "Krishna Yadav":     "krishna@anulachfashion.com",
+    "Manish Gupta":      "manish@anulachfashion.com",
+    "Shantanu Shinde":   "shantanu@anulachfashion.com",
+}
+
+DEPARTMENTS = [
+    "Accounts and Finance", "Administration", "Business Development", "Content",
+    "E-Commerce", "Factory & Production", "Graphics", "Human Resources", "IT",
+    "Social Media", "Store", "Support Staff", "Warehouse", "SEO",
+]
+
+# ============================================================
+# SESSION STATE INITIALISATION
+# ============================================================
+if "clusters" not in st.session_state:
+    st.session_state.clusters = [{
+        "cluster_number": 1, "leave_type": "Select Type",
+        "from_date": datetime.now().date(), "till_date": datetime.now().date(),
+        "approval_code": "",
+    }]
+if "reset_form_tab1" not in st.session_state: st.session_state.reset_form_tab1 = False
+if "reset_form_tab2" not in st.session_state: st.session_state.reset_form_tab2 = False
+
+if "form_data_tab1" not in st.session_state:
+    st.session_state.form_data_tab1 = {
+        "employee_name": "", "employee_code": "", "employee_email": "",
+        "department": "Select Department", "purpose": "",
+        "superior_name": "Select Manager", "is_cluster": False,
+    }
+if "form_data_tab2" not in st.session_state:
+    st.session_state.form_data_tab2 = {"approval_password": "", "action": "Select Decision"}
+
+if "cluster_codes"          not in st.session_state: st.session_state.cluster_codes          = {}
+if "show_copy_section"      not in st.session_state: st.session_state.show_copy_section      = False
+if "test_email_result"      not in st.session_state: st.session_state.test_email_result      = None
+if "email_config_status"    not in st.session_state: st.session_state.email_config_status    = "Not Tested"
+if "debug_logs"             not in st.session_state: st.session_state.debug_logs             = []
+if "generated_codes"        not in st.session_state: st.session_state.generated_codes        = set()
+if "submission_in_progress" not in st.session_state: st.session_state.submission_in_progress = False
+if "submission_completed"   not in st.session_state: st.session_state.submission_completed   = False
+if "last_submission_hash"   not in st.session_state: st.session_state.last_submission_hash   = None
+if "submission_timestamp"   not in st.session_state: st.session_state.submission_timestamp   = None
+
+# ============================================================
+# UTILITY / LOGGING
+# ============================================================
+def add_debug_log(message, level="INFO"):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    log_entry = f"[{timestamp}] [{level}] {message}"
+    st.session_state.debug_logs.append(log_entry)
+    if len(st.session_state.debug_logs) > 50:
+        st.session_state.debug_logs.pop(0)
+    print(f"[{level}] {message}")
+
+
+def log_debug(message):
+    add_debug_log(message, "DEBUG")
+    st.sidebar.text(f"{datetime.now().strftime('%H:%M:%S')}: {message}")
+
+
+# ============================================================
+# GOOGLE CREDENTIALS
+# ============================================================
+def get_google_credentials():
+    try:
+        log_debug("Loading Google credentials from Streamlit secrets...")
+        possible_keys = ["google_credentials", "google", "gcp_service_account", "gcp", "GOOGLE", "GCP"]
+        secrets_key = None
+        for k in possible_keys:
+            if k in st.secrets:
+                secrets_key = k
+                log_debug(f"Found Google credentials section: [{secrets_key}]")
+                break
+        if secrets_key is None:
+            available = list(st.secrets.keys()) if st.secrets else []
+            log_debug(f"Google credentials NOT found. Available keys: {available}")
+            st.error(f"Google credentials not found. Available keys: {available}.")
+            return None
+        try:
+            creds_dict = {
+                "type":                        st.secrets[secrets_key]["type"],
+                "project_id":                  st.secrets[secrets_key]["project_id"],
+                "private_key_id":              st.secrets[secrets_key]["private_key_id"],
+                "private_key":                 st.secrets[secrets_key]["private_key"],
+                "client_email":                st.secrets[secrets_key]["client_email"],
+                "client_id":                   st.secrets[secrets_key]["client_id"],
+                "auth_uri":                    st.secrets[secrets_key]["auth_uri"],
+                "token_uri":                   st.secrets[secrets_key]["token_uri"],
+                "auth_provider_x509_cert_url": st.secrets[secrets_key]["auth_provider_x509_cert_url"],
+                "client_x509_cert_url":        st.secrets[secrets_key]["client_x509_cert_url"],
+            }
+        except KeyError as e:
+            log_debug(f"Missing key in [{secrets_key}]: {str(e)}")
+            st.error(f"Missing field in [{secrets_key}] section: {str(e)}")
+            return None
+        required_fields = ["type", "project_id", "private_key_id", "private_key", "client_email"]
+        missing_fields  = [f for f in required_fields if not creds_dict.get(f)]
+        if missing_fields:
+            st.error(f"Missing Google credential fields: {', '.join(missing_fields)}")
+            return None
+        private_key = creds_dict.get("private_key", "")
+        if private_key:
+            if "-----BEGIN PRIVATE KEY-----" not in private_key:
+                if "\\n" in private_key:
+                    private_key = private_key.replace("\\n", "\n")
+                elif "MII" in private_key[:100]:
+                    private_key = f"-----BEGIN PRIVATE KEY-----\n{private_key}\n-----END PRIVATE KEY-----"
+            if "\n" not in private_key and "\\n" in private_key:
+                private_key = private_key.replace("\\n", "\n")
+            creds_dict["private_key"] = private_key
+        log_debug(f"Google credentials loaded for: {creds_dict['client_email']}")
+        return creds_dict
+    except Exception as e:
+        log_debug(f"Error getting Google credentials: {traceback.format_exc()}")
+        st.error(f"Error loading Google credentials: {str(e)}")
+        return None
+
+
+# ============================================================
+# GOOGLE SHEETS SETUP
+# ============================================================
+def setup_google_sheets():
+    """Connect to Sheet1 of Anulach_Leave_Applications (create headers if needed)."""
+    try:
+        log_debug("Setting up Google Sheets connection...")
+        SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds_dict = get_google_credentials()
+        if not creds_dict:
+            st.error("No Google credentials found")
+            return None
+        try:
+            creds  = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPES)
+            client = gspread.authorize(creds)
+        except Exception as e:
+            log_debug(f"Error creating credentials: {str(e)}")
+            raise e
+        SHEET_NAME = "Anulach_Leave_Applications"   # rename as needed
+        try:
+            spreadsheet = client.open(SHEET_NAME)
+            sheet       = spreadsheet.sheet1
+            log_debug(f"Connected to sheet: {SHEET_NAME}")
+            try:
+                if sheet.row_count == 0 or not sheet.row_values(1):
+                    headers = [
+                        "Submission Date", "Employee Code", "Employee Name", "Department",
+                        "Type of Leave", "No of Days", "Purpose of Leave", "From Date",
+                        "To Date", "Superior or Team leader Name", "Superior or Team leader Email",
+                        "Status", "Approval Date", "Approval Password", "Cluster (Yes/No)",
+                        "Cluster leave Number", "Employee email",
+                    ]
+                    sheet.append_row(headers)
+                    log_debug("Added headers to sheet")
+            except Exception as e:
+                log_debug(f"Warning: Could not check/add headers: {str(e)}")
+            return sheet
+        except gspread.SpreadsheetNotFound:
+            st.error(f"Google Sheet '{SHEET_NAME}' not found!")
+            st.info(f"Please create a sheet named '{SHEET_NAME}' and share it with: {creds_dict.get('client_email', '')}")
+            return None
+        except Exception as e:
+            st.error(f"Error accessing sheet: {str(e)}")
+            return None
+    except Exception as e:
+        log_debug(f"setup_google_sheets error: {traceback.format_exc()}")
+        st.error(f"Error in setup_google_sheets: {str(e)}")
+        return None
+
+
+# ============================================================
+# EMAIL CREDENTIALS
+# ============================================================
+def get_email_credentials():
+    try:
+        log_debug("Getting email credentials from secrets...")
+        sender_email    = None
+        sender_password = None
+        source          = ""
+        email_sections  = ["EMAIL", "email", "gmail", "GMAIL", "SMTP", "smtp"]
+        email_keys      = ["sender_email", "email", "EMAIL", "user", "USER", "username", "USERNAME"]
+        password_keys   = ["sender_password", "password", "PASSWORD", "app_password", "APP_PASSWORD", "pass", "PASS"]
+        for section in email_sections:
+            if section in st.secrets:
+                sec = st.secrets[section]
+                for ek in email_keys:
+                    try:
+                        val = sec[ek]
+                        if val and "@" in str(val):
+                            sender_email = str(val).strip()
+                            break
+                    except (KeyError, TypeError):
+                        continue
+                for pk in password_keys:
+                    try:
+                        val = sec[pk]
+                        if val:
+                            sender_password = str(val).strip()
+                            break
+                    except (KeyError, TypeError):
+                        continue
+                if sender_email and sender_password:
+                    source = f"[{section}]"
+                    break
+        if not sender_email or not sender_password:
+            direct_email_keys = ["EMAIL_SENDER", "sender_email", "email", "EMAIL", "GMAIL_USER"]
+            direct_pass_keys  = ["EMAIL_PASSWORD", "sender_password", "password", "PASSWORD", "GMAIL_PASSWORD", "APP_PASSWORD"]
+            for ek in direct_email_keys:
+                try:
+                    val = st.secrets[ek]
+                    if val and "@" in str(val):
+                        sender_email = str(val).strip()
+                        break
+                except (KeyError, TypeError):
+                    continue
+            for pk in direct_pass_keys:
+                try:
+                    val = st.secrets[pk]
+                    if val:
+                        sender_password = str(val).strip()
+                        break
+                except (KeyError, TypeError):
+                    continue
+            if sender_email and sender_password:
+                source = "Direct top-level keys"
+        if sender_email and sender_password:
+            clean_password = sender_password.replace(" ", "")
+            if len(clean_password) == 16 and len(sender_password) != 16:
+                sender_password = clean_password
+            log_debug(f"Email credentials loaded. Email={sender_email}, Source={source}")
+            return sender_email, sender_password, source
+        available = list(st.secrets.keys()) if st.secrets else []
+        log_debug(f"Email credentials NOT found. Available keys: {available}")
+        return "", "", f"Not Found (available keys: {available})"
+    except Exception as e:
+        log_debug(f"Error getting email credentials: {traceback.format_exc()}")
+        return "", "", f"Error: {str(e)}"
+
+
+def check_email_configuration():
+    sender_email, sender_password, source = get_email_credentials()
+    if not sender_email or not sender_password:
+        return {"configured": False, "message": "Email credentials not found",
+                "details": f"Source info: {source}.", "source": source}
+    if "@" not in sender_email or "." not in sender_email:
+        return {"configured": False, "message": "Invalid email format",
+                "details": f"Email '{sender_email}' doesn't look valid", "source": source}
+    password_type = "App Password (16 chars)" if len(sender_password) == 16 else f"Password ({len(sender_password)} chars)"
+    return {"configured": True, "sender_email": sender_email, "source": source,
+            "password_type": password_type, "password_length": len(sender_password),
+            "message": f"Email credentials found ({password_type})", "details": f"Loaded from: {source}"}
+
+
+# ============================================================
+# SMTP CONNECTION
+# ============================================================
+def create_smtp_connection(sender_email, sender_password):
+    server             = None
+    connection_method  = ""
+    error_messages     = []
+    try:
+        log_debug("Trying SMTP_SSL on port 465...")
+        context = ssl.create_default_context()
+        server  = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10, context=context)
+        server.login(sender_email, sender_password)
+        return server, "SMTP_SSL (Port 465)"
+    except Exception as e1:
+        error_messages.append(f"Port 465 failed: {str(e1)}")
+        if server:
+            try: server.quit()
+            except: pass
+    try:
+        log_debug("Trying STARTTLS on port 587...")
+        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
+        server.ehlo()
+        server.starttls(context=ssl.create_default_context())
+        server.ehlo()
+        server.login(sender_email, sender_password)
+        return server, "STARTTLS (Port 587)"
+    except Exception as e2:
+        error_messages.append(f"Port 587 failed: {str(e2)}")
+        if server:
+            try: server.quit()
+            except: pass
+    for port in [25, 2525]:
+        try:
+            server = smtplib.SMTP("smtp.gmail.com", port, timeout=10)
+            server.starttls(context=ssl.create_default_context())
+            server.login(sender_email, sender_password)
+            return server, f"Port {port}"
+        except Exception as e:
+            error_messages.append(f"Port {port} failed: {str(e)}")
+            if server:
+                try: server.quit()
+                except: pass
+    return None, f"All methods failed: {' | '.join(error_messages)}"
+
+
+def test_email_connection(test_recipient=None):
+    try:
+        sender_email, sender_password, source = get_email_credentials()
+        if not sender_email or not sender_password:
+            return {"success": False, "message": "Email credentials not configured",
+                    "details": "Please check your Streamlit secrets",
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        recipient  = test_recipient or sender_email
+        msg        = MIMEMultipart()
+        msg["From"]    = formataddr(("ANULACH FASHION HR", sender_email))
+        msg["To"]      = recipient
+        msg["Subject"] = "ANULACH FASHION - Email Configuration Test"
+        test_time  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        body = (f"This is a test email from ANULACH FASHION Leave Management System.\n\n"
+                f"Time: {test_time}\nSender: {sender_email}\nRecipient: {recipient}\nSource: {source}\n\n"
+                f"Email configuration is working correctly!\n\n-- ANULACH FASHION HR Department")
+        msg.attach(MIMEText(body, "plain"))
+        server, method = create_smtp_connection(sender_email, sender_password)
+        if server:
+            try:
+                server.sendmail(sender_email, recipient, msg.as_string())
+                server.quit()
+                return {"success": True, "message": f"Email sent via {method}",
+                        "details": f"Test email sent to {recipient} at {test_time}",
+                        "method": method, "sender": sender_email, "timestamp": test_time}
+            except Exception as e:
+                try: server.quit()
+                except: pass
+                return {"success": False, "message": "Failed to send email",
+                        "details": f"Error: {str(e)}", "sender": sender_email, "timestamp": test_time}
+        return {"success": False, "message": "SMTP Connection Failed",
+                "details": f"Error: {method}", "sender": sender_email, "timestamp": test_time}
+    except Exception as e:
+        return {"success": False, "message": "Unexpected Error",
+                "details": f"Error: {str(e)}",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+
+# ============================================================
+# APPROVAL CODE GENERATION
+# ============================================================
+def get_existing_codes_from_sheet(sheet):
+    try:
+        if not sheet:
+            return set()
+        all_records    = sheet.get_all_values()
+        existing_codes = set()
+        for idx, row in enumerate(all_records):
+            if idx == 0:
+                continue
+            if len(row) > 13 and row[13]:
+                existing_codes.add(row[13])
+        log_debug(f"Found {len(existing_codes)} existing codes in sheet")
+        return existing_codes
+    except Exception as e:
+        log_debug(f"Error getting existing codes: {str(e)}")
+        return set()
+
+
+def generate_approval_password(sheet=None):
+    alphabet = string.ascii_uppercase + string.digits
+    alphabet = alphabet.replace("0","").replace("O","").replace("1","").replace("I","").replace("L","")
+    existing_codes = set()
+    if sheet:
+        existing_codes = get_existing_codes_from_sheet(sheet)
+    existing_codes.update(st.session_state.generated_codes)
+    for attempt in range(20):
+        password = "".join(secrets.choice(alphabet) for _ in range(5))
+        if password not in existing_codes:
+            st.session_state.generated_codes.add(password)
+            log_debug(f"Generated unique approval code: {password} (attempt {attempt+1})")
+            return password
+    # Fallback
+    base36     = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+    timestamp  = int(time.time() * 1000)
+    code       = ""
+    temp       = timestamp
+    while temp > 0 and len(code) < 3:
+        temp, r = divmod(temp, 36)
+        code    = base36[r] + code
+    while len(code) < 5:
+        code += secrets.choice(base36)
+    if code not in existing_codes:
+        st.session_state.generated_codes.add(code)
+        return code
+    for i in range(1, 100):
+        fc = f"{code[:4]}{i}"
+        if fc not in existing_codes:
+            st.session_state.generated_codes.add(fc)
+            return fc
+    final = "".join([c for c in str(uuid.uuid4().int)[:5].upper() if c in alphabet])
+    while len(final) < 5:
+        final += secrets.choice(alphabet)
+    st.session_state.generated_codes.add(final)
+    return final
+
+
+# ============================================================
+# CALCULATIONS
+# ============================================================
+def calculate_working_days(from_date, till_date):
+    return (till_date - from_date).days + 1
+
+
+def calculate_days(from_date, till_date, leave_type):
+    if leave_type == "Half Day":
+        return 0.5
+    elif leave_type == "Early Exit":
+        return ""
+    else:
+        return calculate_working_days(from_date, till_date)
+
+
+# ============================================================
+# SHEET INSERT HELPER
+# ============================================================
+def add_data_to_sheet(sheet, row_data):
+    try:
+        all_records   = sheet.get_all_values()
+        next_row      = 2
+        found_empty   = False
+        if len(all_records) > 1:
+            for i in range(1, len(all_records)):
+                if not any(cell.strip() for cell in all_records[i]):
+                    next_row  = i + 1
+                    found_empty = True
+                    break
+            if not found_empty:
+                next_row = len(all_records) + 1
+        sheet.insert_row(row_data, index=next_row)
+        log_debug(f"Data inserted at row {next_row}")
+        return True
+    except Exception as e:
+        log_debug(f"Error adding data to sheet: {str(e)}\n{traceback.format_exc()}")
+        return False
+
+
+# ============================================================
+# LEAVE EMAILS
+# ============================================================
+def send_approval_email(employee_name, superior_name, superior_email,
+                        employee_email, clusters_data, cluster_codes):
+    try:
+        log_debug(f"Sending leave approval email to {superior_email}")
+        sender_email, sender_password, _ = get_email_credentials()
+        if not sender_email or not sender_password:
+            st.warning("Email credentials not configured")
+            return False
+        if "@" not in superior_email or "." not in superior_email:
+            st.warning(f"Invalid superior email: {superior_email}")
+            return False
+        try:
+            app_url = st.secrets.get("APP_URL", "https://your-anulach-leave-app.streamlit.app/")
+        except:
+            app_url = "https://your-anulach-leave-app.streamlit.app/"
+
+        clusters_html = ""
+        for i, cluster in enumerate(clusters_data):
+            days         = calculate_days(cluster["from_date"], cluster["till_date"], cluster["leave_type"])
+            days_display = ("N/A" if cluster["leave_type"] == "Early Exit"
+                            else ("0.5 day" if cluster["leave_type"] == "Half Day"
+                                  else f"{days} days"))
+            clusters_html += f"""
+            <div style="background:{'#f8f9ff' if i%2==0 else '#f0f2ff'};padding:15px;border-radius:8px;
+                        margin:10px 0;border-left:4px solid #4dabf7;">
+                <h4 style="margin-top:0;color:#339af0;">Period {i+1}</h4>
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr><td style="padding:5px;width:40%;"><strong>Leave Type:</strong></td>
+                        <td style="padding:5px;">{cluster["leave_type"]}</td></tr>
+                    <tr><td style="padding:5px;"><strong>From Date:</strong></td>
+                        <td style="padding:5px;">{cluster["from_date"].strftime("%Y-%m-%d")}</td></tr>
+                    <tr><td style="padding:5px;"><strong>Till Date:</strong></td>
+                        <td style="padding:5px;">{cluster["till_date"].strftime("%Y-%m-%d")}</td></tr>
+                    <tr><td style="padding:5px;"><strong>Duration:</strong></td>
+                        <td style="padding:5px;">{days_display}</td></tr>
+                    <tr><td style="padding:5px;"><strong>Approval Code:</strong></td>
+                        <td style="padding:5px;">
+                            <span style="background:#fff3cd;padding:5px 10px;border-radius:4px;
+                                         font-family:'Courier New',monospace;font-weight:bold;
+                                         letter-spacing:2px;">{cluster_codes.get(i, "CODE MISSING")}</span>
+                        </td></tr>
+                </table>
+            </div>"""
+
+        msg = MIMEMultipart("alternative")
+        msg["From"]    = formataddr(("ANULACH FASHION HR", sender_email))
+        msg["To"]      = superior_email
+        msg["Subject"] = (f"CLUSTER LEAVE: {employee_name} - {len(clusters_data)} periods"
+                          if len(clusters_data) > 1 else f"Leave Approval Required: {employee_name}")
+        html_body = f"""
+        <html><head><style>
+        body{{font-family:Arial,sans-serif;line-height:1.6;}}
+        .container{{max-width:700px;margin:0 auto;padding:20px;}}
+        .header{{background:linear-gradient(135deg,#673ab7 0%,#9c27b0 100%);color:white;padding:20px;
+                 border-radius:10px;text-align:center;}}
+        .info-box{{background:#f8f9ff;padding:20px;border-radius:10px;margin:20px 0;border:1px solid #e2e8f0;}}
+        .instructions{{background:#e8f5e9;padding:15px;border-radius:8px;margin:15px 0;border-left:4px solid #4caf50;}}
+        .footer{{color:#666;font-size:12px;margin-top:30px;padding-top:15px;border-top:1px solid #eee;}}
+        </style></head><body>
+        <div class="container">
+            <div class="header">
+                <h2 style="margin:0;">Leave Approval Required</h2>
+                <p style="margin:5px 0 0 0;opacity:0.9;">ANULACH FASHION HR System</p>
+            </div>
+            <p>Dear {superior_name},</p>
+            <div class="info-box">
+                <h3 style="margin-top:0;color:#673ab7;">Employee Information</h3>
+                <p><strong>Employee Name:</strong> {employee_name}</p>
+                <p><strong>Employee Email:</strong> {employee_email or "Not provided"}</p>
+                <p><strong>Employee Code:</strong> {clusters_data[0].get("employee_code","N/A")}</p>
+                <p><strong>Department:</strong> {clusters_data[0].get("department","N/A")}</p>
+                <p><strong>Total Periods:</strong> {len(clusters_data)}</p>
+                <p><strong>Purpose:</strong> {clusters_data[0].get("purpose","N/A")}</p>
+            </div>
+            <h3 style="color:#339af0;">Leave Periods Details</h3>
+            {clusters_html}
+            <div class="instructions">
+                <h4 style="margin-top:0;color:#2e7d32;">How to Approve / Reject:</h4>
+                <ol>
+                    <li>Visit: <a href="{app_url}">{app_url}</a></li>
+                    <li>Click on the <strong>"Approval Portal"</strong> tab</li>
+                    <li>Enter the specific approval code for the period</li>
+                    <li>Select <strong>Approve</strong> or <strong>Reject</strong></li>
+                    <li>Click <strong>Submit Decision</strong></li>
+                </ol>
+                <p><strong>Note:</strong> Each code can only be used once.</p>
+            </div>
+            <div class="footer">
+                ANULACH FASHION PVT LTD - HR Department<br>{sender_email}
+            </div>
+        </div></body></html>"""
+        msg.attach(MIMEText(html_body, "html"))
+
+        # Employee confirmation email
+        msg_employee = None
+        if employee_email and "@" in employee_email:
+            msg_employee = MIMEMultipart("alternative")
+            msg_employee["From"]    = formataddr(("ANULACH FASHION HR", sender_email))
+            msg_employee["To"]      = employee_email
+            msg_employee["Subject"] = (f"Leave Application Submitted: {len(clusters_data)} periods"
+                                       if len(clusters_data) > 1 else "Leave Application Submitted Successfully")
+            emp_clusters_html = ""
+            for i, cluster in enumerate(clusters_data):
+                days         = calculate_days(cluster["from_date"], cluster["till_date"], cluster["leave_type"])
+                days_display = ("N/A" if cluster["leave_type"] == "Early Exit"
+                                else ("0.5 day" if cluster["leave_type"] == "Half Day"
+                                      else f"{days} days"))
+                emp_clusters_html += f"""
+                <div style="background:{'#f8f9ff' if i%2==0 else '#f0f2ff'};padding:15px;border-radius:8px;
+                            margin:10px 0;border-left:4px solid #4dabf7;">
+                    <h4 style="margin-top:0;color:#339af0;">Period {i+1}</h4>
+                    <table style="width:100%;border-collapse:collapse;">
+                        <tr><td style="padding:5px;width:40%;"><strong>Leave Type:</strong></td>
+                            <td style="padding:5px;">{cluster["leave_type"]}</td></tr>
+                        <tr><td style="padding:5px;"><strong>From:</strong></td>
+                            <td style="padding:5px;">{cluster["from_date"].strftime("%Y-%m-%d")}</td></tr>
+                        <tr><td style="padding:5px;"><strong>To:</strong></td>
+                            <td style="padding:5px;">{cluster["till_date"].strftime("%Y-%m-%d")}</td></tr>
+                        <tr><td style="padding:5px;"><strong>Duration:</strong></td>
+                            <td style="padding:5px;">{days_display}</td></tr>
+                    </table>
+                </div>"""
+            html_emp = f"""
+            <html><head><style>
+            body{{font-family:Arial,sans-serif;line-height:1.6;}}
+            .container{{max-width:700px;margin:0 auto;padding:20px;}}
+            .header{{background:linear-gradient(135deg,#4caf50 0%,#2e7d32 100%);color:white;
+                     padding:20px;border-radius:10px;text-align:center;}}
+            .info-box{{background:#f8f9ff;padding:20px;border-radius:10px;margin:20px 0;border:1px solid #e2e8f0;}}
+            .footer{{color:#666;font-size:12px;margin-top:30px;padding-top:15px;border-top:1px solid #eee;}}
+            </style></head><body>
+            <div class="container">
+                <div class="header"><h2 style="margin:0;">Leave Application Confirmation</h2></div>
+                <p>Dear {employee_name},</p>
+                <div class="info-box">
+                    <h3 style="margin-top:0;color:#4caf50;">Application Submitted Successfully</h3>
+                    <p>Your leave application has been submitted and sent to your manager for approval.</p>
+                    <p><strong>Reporting Manager:</strong> {superior_name}</p>
+                    <p><strong>Purpose:</strong> {clusters_data[0].get("purpose","N/A")}</p>
+                    <p><strong>Total Periods:</strong> {len(clusters_data)}</p>
+                </div>
+                <h3 style="color:#339af0;">Your Leave Periods</h3>
+                {emp_clusters_html}
+                <div class="footer">
+                    ANULACH FASHION PVT LTD - HR Department<br>{sender_email}
+                </div>
+            </div></body></html>"""
+            msg_employee.attach(MIMEText(html_emp, "html"))
+
+        server, method = create_smtp_connection(sender_email, sender_password)
+        if server:
+            try:
+                server.sendmail(sender_email, superior_email, msg.as_string())
+                log_debug(f"Approval email sent to {superior_email}")
+                if msg_employee and employee_email and "@" in employee_email:
+                    try:
+                        server.sendmail(sender_email, employee_email, msg_employee.as_string())
+                        log_debug(f"Confirmation email sent to {employee_email}")
+                    except Exception as e:
+                        log_debug(f"Could not send confirmation to employee: {str(e)}")
+                server.quit()
+                return True
+            except Exception as e:
+                try: server.quit()
+                except: pass
+                log_debug(f"Failed to send emails: {str(e)}")
+                st.error(f"Failed to send emails: {str(e)}")
+                return False
+        st.error(f"Could not establish SMTP connection: {method}")
+        return False
+    except Exception as e:
+        log_debug(f"Error in send_approval_email: {traceback.format_exc()}")
+        st.error(f"Email sending error: {str(e)}")
+        return False
+
+
+def send_decision_email_to_employee(employee_name, employee_email, superior_name, status,
+                                    cluster_info=None, cluster_number=None, total_clusters=None):
+    try:
+        sender_email, sender_password, _ = get_email_credentials()
+        if not sender_email or not sender_password: return False
+        if not employee_email or "@" not in employee_email: return False
+        msg = MIMEMultipart("alternative")
+        msg["From"] = formataddr(("ANULACH FASHION HR", sender_email))
+        msg["To"]   = employee_email
+        if cluster_number and total_clusters and total_clusters > 1:
+            msg["Subject"] = f"Leave Period {cluster_number}/{total_clusters} {status} - {employee_name}"
+        else:
+            msg["Subject"] = f"Leave Application {status} - {employee_name}"
+        status_color = "#4caf50" if status == "Approved" else "#f44336"
+        status_bg    = "#e8f5e9" if status == "Approved" else "#ffebee"
+        cluster_details = ""
+        if cluster_info:
+            fd = (datetime.strptime(cluster_info["from_date"], "%Y-%m-%d").date()
+                  if isinstance(cluster_info["from_date"], str) else cluster_info["from_date"])
+            td = (datetime.strptime(cluster_info["till_date"], "%Y-%m-%d").date()
+                  if isinstance(cluster_info["till_date"], str) else cluster_info["till_date"])
+            days         = calculate_days(fd, td, cluster_info["leave_type"])
+            days_display = ("N/A" if cluster_info["leave_type"] == "Early Exit"
+                            else ("0.5 day" if cluster_info["leave_type"] == "Half Day"
+                                  else f"{days} days"))
+            fd_str = fd.strftime("%Y-%m-%d") if hasattr(fd, "strftime") else cluster_info["from_date"]
+            td_str = td.strftime("%Y-%m-%d") if hasattr(td, "strftime") else cluster_info["till_date"]
+            label  = (f"Period {cluster_number}"
+                      if cluster_number and total_clusters and total_clusters > 1 else "Leave Period")
+            cluster_details = f"""
+            <div style="background:#f8f9ff;padding:15px;border-radius:8px;margin:15px 0;
+                        border-left:4px solid #4dabf7;">
+                <h4 style="margin-top:0;color:#339af0;">{label} Details</h4>
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr><td style="padding:5px;width:40%;"><strong>Leave Type:</strong></td>
+                        <td style="padding:5px;">{cluster_info["leave_type"]}</td></tr>
+                    <tr><td style="padding:5px;"><strong>From:</strong></td>
+                        <td style="padding:5px;">{fd_str}</td></tr>
+                    <tr><td style="padding:5px;"><strong>To:</strong></td>
+                        <td style="padding:5px;">{td_str}</td></tr>
+                    <tr><td style="padding:5px;"><strong>Duration:</strong></td>
+                        <td style="padding:5px;">{days_display}</td></tr>
+                </table>
+            </div>"""
+        status_msg = ("""<div style="background:#e8f5e9;padding:15px;border-radius:8px;margin:15px 0;
+                            border-left:4px solid #4caf50;">
+                          <h4 style="margin-top:0;color:#2e7d32;">Approval Confirmation</h4>
+                          <p>Your leave has been approved. You can proceed with your leave plans.</p>
+                        </div>"""
+                      if status == "Approved" else
+                      f"""<div style="background:#ffebee;padding:15px;border-radius:8px;margin:15px 0;
+                              border-left:4px solid #f44336;">
+                            <h4 style="margin-top:0;color:#c62828;">Rejection Notification</h4>
+                            <p>Your leave request has been rejected. Please contact
+                               <strong>{superior_name}</strong> for more information.</p>
+                          </div>""")
+        html_body = f"""
+        <html><head><style>
+        body{{font-family:Arial,sans-serif;line-height:1.6;}}
+        .container{{max-width:700px;margin:0 auto;padding:20px;}}
+        .header{{background:linear-gradient(135deg,{status_color} 0%,{status_color}80 100%);color:white;
+                 padding:20px;border-radius:10px;text-align:center;}}
+        .info-box{{background:{status_bg};padding:20px;border-radius:10px;margin:20px 0;}}
+        .footer{{color:#666;font-size:12px;margin-top:30px;padding-top:15px;border-top:1px solid #eee;}}
+        </style></head><body>
+        <div class="container">
+            <div class="header"><h2 style="margin:0;">Leave Application {status}</h2></div>
+            <p>Dear {employee_name},</p>
+            <div class="info-box">
+                <h3 style="margin-top:0;color:{status_color};">
+                    Your leave request has been {status.lower()}
+                </h3>
+                <p><strong>Decision by:</strong> {superior_name}</p>
+                <p><strong>Decision Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+                {cluster_details}
+                {status_msg}
+            </div>
+            <div class="footer">
+                ANULACH FASHION PVT LTD - HR Department<br>{sender_email}
+            </div>
+        </div></body></html>"""
+        msg.attach(MIMEText(html_body, "html"))
+        server, method = create_smtp_connection(sender_email, sender_password)
+        if server:
+            try:
+                server.sendmail(sender_email, employee_email, msg.as_string())
+                server.quit()
+                log_debug(f"Decision email sent to employee: {employee_email}")
+                return True
+            except Exception as e:
+                try: server.quit()
+                except: pass
+                log_debug(f"Failed to send decision email: {str(e)}")
+                return False
+        return False
+    except Exception as e:
+        log_debug(f"Error in send_decision_email_to_employee: {traceback.format_exc()}")
+        return False
+
+
+def send_decision_email_to_superior(employee_name, employee_email, superior_name,
+                                    superior_email, status, approval_password):
+    try:
+        sender_email, sender_password, _ = get_email_credentials()
+        if not sender_email or not sender_password: return False
+        msg = MIMEMultipart("alternative")
+        msg["From"]    = formataddr(("ANULACH FASHION HR", sender_email))
+        msg["To"]      = superior_email
+        msg["Subject"] = f"Leave Decision Recorded: {employee_name} - {status}"
+        html_body = f"""
+        <html><head><style>
+        body{{font-family:Arial,sans-serif;line-height:1.6;}}
+        .container{{max-width:700px;margin:0 auto;padding:20px;}}
+        .header{{background:linear-gradient(135deg,#673ab7 0%,#9c27b0 100%);color:white;
+                 padding:20px;border-radius:10px;text-align:center;}}
+        .success-box{{background:#e8f5e9;padding:15px;border-radius:8px;margin:15px 0;border-left:4px solid #4caf50;}}
+        .info-box{{background:#f8f9ff;padding:20px;border-radius:10px;margin:20px 0;border:1px solid #e2e8f0;}}
+        .footer{{color:#666;font-size:12px;margin-top:30px;padding-top:15px;border-top:1px solid #eee;}}
+        </style></head><body>
+        <div class="container">
+            <div class="header"><h2 style="margin:0;">Decision Confirmation</h2></div>
+            <p>Dear {superior_name},</p>
+            <div class="success-box">
+                <p>You have successfully <strong>{status.lower()}</strong> the leave request
+                   for <strong>{employee_name}</strong>.</p>
+            </div>
+            <div class="info-box">
+                <p><strong>Employee:</strong> {employee_name}</p>
+                <p><strong>Decision:</strong>
+                    <span style="color:{'#4caf50' if status=='Approved' else '#f44336'};
+                                 font-weight:bold;">{status}</span></p>
+                <p><strong>Code Used:</strong> {approval_password}</p>
+                <p><strong>Decision Time:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+            </div>
+            <div class="footer">
+                ANULACH FASHION PVT LTD - HR Department<br>{sender_email}
+            </div>
+        </div></body></html>"""
+        msg.attach(MIMEText(html_body, "html"))
+        server, method = create_smtp_connection(sender_email, sender_password)
+        if server:
+            try:
+                server.sendmail(sender_email, superior_email, msg.as_string())
+                server.quit()
+                return True
+            except Exception as e:
+                try: server.quit()
+                except: pass
+                return False
+        return False
+    except Exception as e:
+        log_debug(f"Error in send_decision_email_to_superior: {traceback.format_exc()}")
+        return False
+
+
+def update_leave_status(sheet, approval_password, status):
+    try:
+        all_records = sheet.get_all_values()
+        for idx, row in enumerate(all_records):
+            if idx == 0:
+                continue
+            if len(row) > 13 and row[13] == approval_password:
+                sheet.update_cell(idx + 1, 12, status)
+                sheet.update_cell(idx + 1, 13, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                employee_name  = row[2]  if len(row) > 2  else ""
+                employee_email = row[16] if len(row) > 16 else ""
+                superior_name  = row[9]  if len(row) > 9  else ""
+                superior_email = row[10] if len(row) > 10 else ""
+                cluster_info   = None
+                if len(row) > 4:
+                    cluster_info = {
+                        "leave_type": row[4] if len(row) > 4 else "",
+                        "from_date":  row[7] if len(row) > 7 else "",
+                        "till_date":  row[8] if len(row) > 8 else "",
+                    }
+                is_cluster     = row[14] if len(row) > 14 else "No"
+                cluster_number = None
+                if is_cluster == "Yes" and len(row) > 15:
+                    cluster_number = row[15] if row[15] else None
+                total_clusters = None
+                if is_cluster == "Yes" and employee_name:
+                    total_clusters = sum(
+                        1 for r in all_records[1:]
+                        if len(r) > 2 and r[2] == employee_name and len(r) > 14 and r[14] == "Yes"
+                    )
+                log_debug(f"Updated row {idx+1} to status: {status}")
+                if employee_email and "@" in employee_email:
+                    send_decision_email_to_employee(employee_name, employee_email,
+                                                    superior_name, status,
+                                                    cluster_info, cluster_number, total_clusters)
+                if superior_email and "@" in superior_email:
+                    send_decision_email_to_superior(employee_name, employee_email,
+                                                    superior_name, superior_email,
+                                                    status, approval_password)
+                return True
+        log_debug("No matching record found for approval code")
+        return False
+    except Exception as e:
+        st.error(f"Error updating leave status: {str(e)}")
+        log_debug(f"Update leave error: {traceback.format_exc()}")
+        return False
+
+
+# ============================================================
+# DUPLICATE SUBMISSION GUARD
+# ============================================================
+def generate_submission_hash(form_data):
+    data_string = (f"{form_data['employee_name']}_{form_data['employee_code']}_"
+                   f"{form_data['purpose']}_{datetime.now().strftime('%Y%m%d')}")
+    return hashlib.md5(data_string.encode()).hexdigest()
+
+
+def check_duplicate_submission(form_data):
+    current_hash = generate_submission_hash(form_data)
+    if st.session_state.last_submission_hash == current_hash:
+        if st.session_state.submission_timestamp:
+            time_diff = (datetime.now() - st.session_state.submission_timestamp).total_seconds()
+            if time_diff < 30:
+                return True, "You have already submitted this form. Please wait before submitting again."
+    return False, ""
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+st.sidebar.title("Configuration Panel")
+email_config = check_email_configuration()
+
+st.sidebar.markdown("### Secrets Diagnostic")
+try:
+    all_secret_keys = list(st.secrets.keys())
+    st.sidebar.info(f"Top-level secret keys:\n`{all_secret_keys}`")
+except Exception:
+    st.sidebar.error("Could not read st.secrets")
+
+st.sidebar.markdown("### Email Configuration")
+if email_config["configured"]:
+    st.sidebar.success(f"Email ready: {email_config['sender_email']}")
+    st.sidebar.info(f"**Source:** {email_config['source']}")
+    if "password_type" in email_config:
+        st.sidebar.info(f"**Password Type:** {email_config['password_type']} ({email_config.get('password_length','?')} chars)")
+else:
+    st.sidebar.error("Email credentials NOT found")
+    st.sidebar.warning(
+        "Add to Streamlit Secrets:\n\n"
+        "```toml\n[EMAIL]\nsender_email = \"you@gmail.com\"\n"
+        "sender_password = \"abcd efgh ijkl mnop\"\n```"
+    )
+    st.sidebar.caption(f"Details: {email_config.get('details', email_config.get('message',''))}")
+
+st.sidebar.markdown("---")
+if st.sidebar.button("Test Google Sheets Connection"):
+    with st.sidebar:
+        with st.spinner("Testing..."):
+            sheet = setup_google_sheets()
+            if sheet:
+                st.success("Connected!")
+                st.info(f"Sheet: Anulach_Leave_Applications | Rows: {sheet.row_count}")
+            else:
+                st.error("Connection failed")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Test Email Configuration")
+test_recipient = st.sidebar.text_input("Test Recipient Email", value="",
+                                       placeholder="Leave blank to send to yourself")
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    if st.button("Send Test Email", key="test_email_btn", use_container_width=True):
+        with st.spinner("Sending..."):
+            result = test_email_connection(test_recipient)
+            st.session_state.test_email_result = result
+            if result["success"]:
+                st.session_state.email_config_status = "Working"
+                st.sidebar.success("Test email sent!")
+            else:
+                st.session_state.email_config_status = "Failed"
+                st.sidebar.error("Test failed")
+with col2:
+    if st.button("Clear Logs", key="clear_logs", use_container_width=True):
+        st.session_state.debug_logs = []
+
+if st.session_state.test_email_result:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Last Test Result")
+    if st.session_state.test_email_result["success"]:
+        st.sidebar.success("Last test: SUCCESS")
+        st.sidebar.info(f"**Method:** {st.session_state.test_email_result.get('method','Unknown')}")
+    else:
+        st.sidebar.error("Last test: FAILED")
+        with st.sidebar.expander("View Error Details"):
+            st.error(st.session_state.test_email_result.get("message","No message"))
+            st.info(st.session_state.test_email_result.get("details","No details"))
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Debug Logs")
+if st.sidebar.checkbox("Show Debug Logs", value=False):
+    if st.session_state.debug_logs:
+        html = "<div class='debug-log'>"
+        for log in reversed(st.session_state.debug_logs[-10:]):
+            color = ("#dc3545" if "ERROR" in log
+                     else "#28a745" if "SUCCESS" in log or "INFO" in log
+                     else "#ffc107" if "WARNING" in log else "inherit")
+            html += f"<div style='color:{color};'>{log}</div>"
+        html += "</div>"
+        st.sidebar.markdown(html, unsafe_allow_html=True)
+    else:
+        st.sidebar.info("No debug logs yet")
+
+st.sidebar.markdown("---")
+with st.sidebar.expander("Email Setup Guide"):
+    st.markdown("""
+    **Step-by-Step Gmail Configuration:**
+
+    1. Enable 2-Step Verification:
+       https://myaccount.google.com/security
+
+    2. Generate App Password:
+       https://myaccount.google.com/apppasswords
+       - Select Mail → Other (Custom name)
+       - Name it "ANULACH FASHION Streamlit"
+       - Copy the 16-character password
+
+    3. Update Streamlit Secrets:
+    ```toml
+    [EMAIL]
+    sender_email = "hr@anulachfashion.com"
+    sender_password = "your-16-char-app-password"
+    ```
+    4. Click **Send Test Email** to verify.
+    """)
+
+
+# ============================================================
+# MAIN HEADER
+# ============================================================
+st.markdown("""
+    <div class="company-header floating-element">
+        <h1>ANULACH FASHION</h1>
+        <h2>Leave Management System</h2>
+    </div>
+""", unsafe_allow_html=True)
+
+tab1, tab2 = st.tabs([
+    "\U0001f4dd Submit Leave Application",
+    "\u2705 Approval Portal",
+])
+
+
+# ============================================================
+# TAB 1 — SUBMIT LEAVE APPLICATION
+# ============================================================
+with tab1:
+    # ── email status banner ──────────────────────────────────
+    if not email_config["configured"] or st.session_state.email_config_status == "Failed":
+        st.markdown("""
+            <div style="background:linear-gradient(135deg,#fff3cd 0%,#ffeaa7 100%);
+                        border-left:4px solid #ff9800;color:#856404;
+                        padding:1.5rem;border-radius:12px;margin-bottom:2rem;">
+                <strong>&#x26A0;&#xFE0F; Email Configuration Issue Detected</strong><br>
+                <span style="font-size:0.95rem;">
+                    Emails may not send automatically. Test your email config in the sidebar.
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+    elif st.session_state.email_config_status == "Working":
+        st.markdown("""
+            <div style="background:linear-gradient(135deg,#d4edda 0%,#c3e6cb 100%);
+                        border-left:4px solid #28a745;color:#155724;
+                        padding:1.5rem;border-radius:12px;margin-bottom:2rem;">
+                <strong>&#x2705; Email Configuration Working</strong><br>
+                <span style="font-size:0.95rem;">
+                    Email notifications will be sent automatically to managers and employees.
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("""
+        <div class="section-header">
+            <div class="icon-badge">&#x1F4CB;</div>
+            <div>
+                <h3 style="margin:0;">Leave Application Form</h3>
+                <p style="margin:5px 0 0 0;color:#718096;font-size:0.95rem;">
+                    Complete all fields below to submit your leave request
+                </p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # ── reset guard ──────────────────────────────────────────
+    if st.session_state.reset_form_tab1:
+        st.session_state.form_data_tab1 = {
+            "employee_name": "", "employee_code": "", "employee_email": "",
+            "department": "Select Department", "purpose": "",
+            "superior_name": "Select Manager", "is_cluster": False,
+        }
+        st.session_state.clusters = [{
+            "cluster_number": 1, "leave_type": "Select Type",
+            "from_date": datetime.now().date(), "till_date": datetime.now().date(),
+            "approval_code": "",
+        }]
+        st.session_state.cluster_codes        = {}
+        st.session_state.reset_form_tab1      = False
+        st.session_state.submission_in_progress = False
+        st.session_state.submission_completed   = True
+
+    # ── employee info ────────────────────────────────────────
+    col1, col2, col3 = st.columns([1, 1, 1], gap="large")
+    with col1:
+        employee_name  = st.text_input("Full Name", value=st.session_state.form_data_tab1["employee_name"],
+                                       placeholder="Enter your full name", key="employee_name_input")
+    with col2:
+        employee_code  = st.text_input("Employee ID", value=st.session_state.form_data_tab1["employee_code"],
+                                       placeholder="e.g., AF-EMP-001", key="employee_code_input")
+    with col3:
+        employee_email = st.text_input("Employee Email", value=st.session_state.form_data_tab1["employee_email"],
+                                       placeholder="your.email@company.com", key="employee_email_input")
+
+    col4, col5 = st.columns([1, 1], gap="large")
+    with col4:
+        department = st.selectbox("Department", ["Select Department"] + DEPARTMENTS, index=0,
+                                  key="department_select")
+    with col5:
+        is_cluster = st.checkbox(
+            "Is this a Cluster Holiday? (Multiple leave periods)",
+            value=st.session_state.form_data_tab1["is_cluster"],
+            help="Check this if you need to apply for multiple separate leave periods",
+            key="is_cluster_checkbox",
+        )
+
+    # ── cluster / single leave ───────────────────────────────
+    if is_cluster:
+        st.markdown("""
+            <div class="cluster-section">
+                <div class="cluster-header">
+                    <div class="icon-badge"
+                         style="background:linear-gradient(135deg,#4dabf7 0%,#339af0 100%);">&#x1F4C5;</div>
+                    <div>
+                        <h3 style="margin:0;color:#ffffff !important;">Cluster Holiday Periods</h3>
+                        <p style="margin:5px 0 0 0;color:#4dabf7;font-size:0.95rem;">
+                            Add multiple leave periods below (each gets a separate approval code)
+                        </p>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        total_clusters = len(st.session_state.clusters)
+        for i, cluster in enumerate(st.session_state.clusters):
+            st.markdown(f"<h4 style='color:#339af0;'>Period {i+1}</h4>", unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns([2, 2, 1, 1])
+            with c1:
+                leave_type = st.selectbox(
+                    f"Leave Type - Period {i+1}",
+                    ["Select Type", "Full Day", "Half Day", "Early Exit"],
+                    index=0 if cluster["leave_type"] == "Select Type"
+                    else ["Select Type","Full Day","Half Day","Early Exit"].index(cluster["leave_type"]),
+                    key=f"leave_type_cluster_{i}",
+                )
+                st.session_state.clusters[i]["leave_type"] = leave_type
+            with c2:
+                if leave_type in ["Half Day", "Early Exit"]:
+                    sel = st.date_input(f"Date - Period {i+1}", value=cluster["from_date"],
+                                        min_value=datetime.now().date() - timedelta(days=60),
+                                        key=f"date_cluster_{i}")
+                    st.session_state.clusters[i]["from_date"] = sel
+                    st.session_state.clusters[i]["till_date"] = sel
+                else:
+                    ca, cb = st.columns(2)
+                    with ca:
+                        fd = st.date_input(f"From - Period {i+1}", value=cluster["from_date"],
+                                           min_value=datetime.now().date() - timedelta(days=60),
+                                           key=f"from_date_cluster_{i}")
+                        st.session_state.clusters[i]["from_date"] = fd
+                    with cb:
+                        td = st.date_input(f"To - Period {i+1}", value=cluster["till_date"],
+                                           min_value=datetime.now().date() - timedelta(days=60),
+                                           key=f"till_date_cluster_{i}")
+                        st.session_state.clusters[i]["till_date"] = td
+            with c3:
+                if leave_type != "Select Type":
+                    days = calculate_days(st.session_state.clusters[i]["from_date"],
+                                         st.session_state.clusters[i]["till_date"], leave_type)
+                    d_str = ("N/A" if leave_type == "Early Exit"
+                             else "0.5" if leave_type == "Half Day" else str(days))
+                    st.markdown(f"""
+                        <div style="background:#e3f2fd;padding:10px;border-radius:8px;text-align:center;">
+                            <div style="font-size:0.8rem;color:#1976d2;">Days</div>
+                            <div style="font-size:1.2rem;font-weight:bold;color:#0d47a1;">{d_str}</div>
+                        </div>""", unsafe_allow_html=True)
+            with c4:
+                if total_clusters > 1:
+                    if st.button("Remove", key=f"remove_cluster_{i}"):
+                        st.session_state.clusters.pop(i)
+                        st.rerun()
+
+        if st.button("Add Another Period", key="add_cluster"):
+            st.session_state.clusters.append({
+                "cluster_number": len(st.session_state.clusters) + 1,
+                "leave_type": "Select Type",
+                "from_date": datetime.now().date(), "till_date": datetime.now().date(),
+                "approval_code": "",
+            })
+            st.rerun()
+
+        total_days = sum(
+            (calculate_working_days(c["from_date"], c["till_date"]) if c["leave_type"] == "Full Day"
+             else 0.5 if c["leave_type"] == "Half Day" else 0)
+            for c in st.session_state.clusters
+        )
+        st.markdown(f"""
+            <div style="background:linear-gradient(135deg,#4dabf7 0%,#339af0 100%);
+                        color:white;padding:1rem;border-radius:12px;text-align:center;margin:1rem 0;">
+                <div style="font-size:0.9rem;">Total Working Days</div>
+                <div style="font-size:2rem;font-weight:bold;">{total_days}</div>
+                <div style="font-size:0.8rem;">across {len(st.session_state.clusters)} period(s)</div>
+            </div>""", unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <div style="margin-top:2rem;">
+                <div style="display:flex;align-items:center;margin-bottom:1rem;">
+                    <div class="icon-badge"
+                         style="background:linear-gradient(135deg,#2196f3 0%,#03a9f4 100%);">&#x1F4C5;</div>
+                    <div>
+                        <h3 style="margin:0;">Leave Details</h3>
+                        <p style="margin:5px 0 0 0;color:#718096;font-size:0.95rem;">
+                            Enter your leave period details
+                        </p>
+                    </div>
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+        c1, c2 = st.columns([1, 1], gap="large")
+        with c1:
+            leave_type = st.selectbox("Leave Type",
+                                      ["Select Type", "Full Day", "Half Day", "Early Exit"],
+                                      index=0, key="leave_type_single")
+        with c2:
+            if leave_type in ["Half Day", "Early Exit"]:
+                sel = st.date_input("Date", value=st.session_state.clusters[0]["from_date"],
+                                    min_value=datetime.now().date() - timedelta(days=60),
+                                    key="date_single")
+                from_date = till_date = sel
+            else:
+                ca, cb = st.columns(2)
+                with ca:
+                    from_date = st.date_input("Start Date", value=st.session_state.clusters[0]["from_date"],
+                                              min_value=datetime.now().date() - timedelta(days=60),
+                                              key="from_date_single")
+                with cb:
+                    till_date = st.date_input("End Date", value=st.session_state.clusters[0]["till_date"],
+                                              min_value=datetime.now().date() - timedelta(days=60),
+                                              key="till_date_single")
+
+        st.session_state.clusters[0]["leave_type"] = leave_type
+        st.session_state.clusters[0]["from_date"]  = from_date
+        st.session_state.clusters[0]["till_date"]  = till_date
+
+        if leave_type != "Select Type":
+            no_of_days = calculate_days(from_date, till_date, leave_type)
+            if leave_type == "Early Exit":
+                st.markdown("""
+                    <div class="thumbsup-box floating-element">
+                        <div class="thumbsup-emoji">&#x1F44D;</div>
+                        <div style="font-size:1.1rem;font-weight:600;margin-bottom:8px;">Early Exit Request</div>
+                        <div style="font-size:0.95rem;">
+                            You are requesting to leave early. Only 1 Early Leave is permitted per month.
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+            elif leave_type == "Half Day":
+                st.markdown("""
+                    <div class="metric-card floating-element">
+                        <div style="font-size:0.9rem;color:#6b46c1;font-weight:500;">Leave Duration</div>
+                        <div style="font-size:2.5rem;font-weight:700;color:#553c9a;margin:10px 0;">0.5</div>
+                        <div style="font-size:0.9rem;color:#805ad5;">half day</div>
+                    </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                    <div class="metric-card floating-element">
+                        <div style="font-size:0.9rem;color:#6b46c1;font-weight:500;">Leave Duration</div>
+                        <div style="font-size:2.5rem;font-weight:700;color:#553c9a;margin:10px 0;">{no_of_days}</div>
+                        <div style="font-size:0.9rem;color:#805ad5;">working days</div>
+                    </div>""", unsafe_allow_html=True)
+
+    # ── additional details ───────────────────────────────────
+    st.markdown("""
+        <div style="margin-top:2.5rem;">
+            <div style="display:flex;align-items:center;margin-bottom:1rem;">
+                <div class="icon-badge"
+                     style="background:linear-gradient(135deg,#2196f3 0%,#03a9f4 100%);">&#x1F4DD;</div>
+                <div>
+                    <h3 style="margin:0;">Additional Details</h3>
+                    <p style="margin:5px 0 0 0;color:#718096;font-size:0.95rem;">
+                        Provide detailed information about your leave request
+                    </p>
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+    purpose = st.text_area(
+        "Purpose of Leave", value=st.session_state.form_data_tab1["purpose"],
+        placeholder="Please provide a clear and detailed explanation for your leave request...",
+        height=120, key="purpose_textarea",
+    )
+
+    superior_name = st.selectbox(
+        "Reporting Manager or Team Leader",
+        ["Select Manager"] + list(SUPERIORS.keys()),
+        index=0, key="superior_select",
+    )
+
+    # ── submit button ────────────────────────────────────────
+    _, submit_col, _ = st.columns([1, 2, 1])
+    with submit_col:
+        disabled = st.session_state.get("submission_in_progress", False)
+        if disabled:
+            st.info("Processing your submission… Please wait.")
+        submit_button = st.button("Submit Leave Request", type="primary",
+                                  use_container_width=True, key="submit_leave_request",
+                                  disabled=disabled)
+
+        if submit_button and not disabled:
+            st.session_state.submission_in_progress = True
+            form_check = {"employee_name": employee_name,
+                          "employee_code": employee_code, "purpose": purpose}
+            is_dup, dup_msg = check_duplicate_submission(form_check)
+            if is_dup:
+                st.session_state.submission_in_progress = False
+                st.markdown(f"""<div class="error-message">
+                    <strong>Duplicate Submission Detected</strong><br>{dup_msg}
+                </div>""", unsafe_allow_html=True)
+            else:
+                errors = []
+                if not all([employee_name, employee_code, employee_email,
+                             department != "Select Department", purpose,
+                             superior_name != "Select Manager"]):
+                    errors.append("Please complete all required fields")
+                if employee_email and ("@" not in employee_email or "." not in employee_email):
+                    errors.append("Please enter a valid email address")
+                for i, cluster in enumerate(st.session_state.clusters):
+                    if cluster["leave_type"] == "Select Type":
+                        errors.append(f"Please select leave type for Period {i+1}")
+                        break
+                    if cluster["leave_type"] == "Full Day" and cluster["from_date"] > cluster["till_date"]:
+                        errors.append(f"End date must be on or after start date for Period {i+1}")
+                        break
+                if errors:
+                    st.session_state.submission_in_progress = False
+                    html = "<div class='error-message'><strong>Validation Error</strong><br>"
+                    for e in errors: html += f"{e}<br>"
+                    st.markdown(html + "</div>", unsafe_allow_html=True)
+                else:
+                    with st.spinner("Submitting your application…"):
+                        submission_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        superior_email  = SUPERIORS[superior_name]
+                        sheet = setup_google_sheets()
+                        if sheet:
+                            try:
+                                # Generate unique codes for each period
+                                cluster_codes = {}
+                                for i in range(len(st.session_state.clusters)):
+                                    cluster_codes[i] = generate_approval_password(sheet)
+                                    log_debug(f"Code for period {i+1}: {cluster_codes[i]}")
+
+                                # Write each period to sheet
+                                for i, cluster in enumerate(st.session_state.clusters):
+                                    days = calculate_days(cluster["from_date"], cluster["till_date"],
+                                                          cluster["leave_type"])
+                                    row_data = [
+                                        submission_date, employee_code.strip(), employee_name.strip(),
+                                        department.strip(), cluster["leave_type"].strip(),
+                                        str(days) if days is not None else "",
+                                        purpose.strip(),
+                                        cluster["from_date"].strftime("%Y-%m-%d"),
+                                        cluster["till_date"].strftime("%Y-%m-%d"),
+                                        superior_name.strip(), superior_email.strip(),
+                                        "Pending", "", cluster_codes[i],
+                                        "Yes" if is_cluster else "No",
+                                        str(i+1) if is_cluster else "",
+                                        employee_email.strip(),
+                                    ]
+                                    while len(row_data) < 17: row_data.append("")
+                                    row_data = [str(x) if x is not None else "" for x in row_data[:17]]
+                                    if not add_data_to_sheet(sheet, row_data):
+                                        raise Exception(f"Failed to write to Google Sheets for period {i+1}")
+
+                                # Send emails
+                                email_sent  = False
+                                email_error = ""
+                                if email_config["configured"]:
+                                    try:
+                                        clusters_for_email = []
+                                        for c in st.session_state.clusters:
+                                            cc = c.copy()
+                                            cc["employee_code"] = employee_code
+                                            cc["department"]    = department
+                                            cc["purpose"]       = purpose
+                                            clusters_for_email.append(cc)
+                                        email_sent = send_approval_email(
+                                            employee_name, superior_name, superior_email,
+                                            employee_email, clusters_for_email, cluster_codes,
+                                        )
+                                    except Exception as e:
+                                        email_error = str(e)
+                                        log_debug(f"Email error: {traceback.format_exc()}")
+
+                                st.session_state.last_submission_hash  = generate_submission_hash(form_check)
+                                st.session_state.submission_timestamp  = datetime.now()
+                                st.session_state.submission_in_progress = False
+                                st.session_state.submission_completed   = True
+
+                                if email_sent:
+                                    st.markdown("""
+                                        <div class="success-message">
+                                            <div style="font-size:3rem;margin-bottom:1rem;">&#x2728;</div>
+                                            <div style="font-size:1.5rem;font-weight:600;margin-bottom:10px;">
+                                                Application Submitted Successfully!
+                                            </div>
+                                            <div style="margin-bottom:15px;">
+                                                Your leave request has been sent to your manager for approval.
+                                            </div>
+                                            <div style="font-size:0.95rem;opacity:0.9;">
+                                                Confirmation email sent to your email address.
+                                            </div>
+                                        </div>""", unsafe_allow_html=True)
+                                    st.balloons()
+                                    st.session_state.generated_codes.clear()
+                                    st.session_state.reset_form_tab1 = True
+                                    time.sleep(2)
+                                    st.rerun()
+                                else:
+                                    st.session_state.cluster_codes   = cluster_codes
+                                    st.session_state.show_copy_section = True
+                                    st.markdown(f"""
+                                        <div class="info-box">
+                                            <strong style="color:#ff9800;">&#x1F4E7; Email Notification Issue</strong><br>
+                                            Application saved to database successfully!<br>
+                                            Email could not be sent automatically.<br>
+                                            <small>{email_error}</small>
+                                        </div>""", unsafe_allow_html=True)
+                                    st.markdown(f"""
+                                        <div style="text-align:center;margin:2rem 0;">
+                                            <div style="font-size:1.3rem;font-weight:600;color:#673ab7;margin-bottom:1rem;">
+                                                Manual Approval Process
+                                            </div>
+                                            <p style="color:#718096;margin-bottom:1.5rem;">
+                                                Please share these approval codes with your manager
+                                                <strong>{superior_name}</strong>:
+                                            </p>
+                                        </div>""", unsafe_allow_html=True)
+                                    for i, cluster in enumerate(st.session_state.clusters):
+                                        code = cluster_codes[i]
+                                        days = calculate_days(cluster["from_date"],
+                                                              cluster["till_date"], cluster["leave_type"])
+                                        d_str = ("N/A" if cluster["leave_type"] == "Early Exit"
+                                                 else "0.5 day" if cluster["leave_type"] == "Half Day"
+                                                 else f"{days} days")
+                                        st.markdown(f"""
+                                            <div style="background:{'#f8f9ff' if i%2==0 else '#f0f2ff'};
+                                                        padding:1.5rem;border-radius:12px;margin:1rem 0;
+                                                        border-left:4px solid #4dabf7;">
+                                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                                    <div>
+                                                        <div style="font-size:1.1rem;font-weight:600;color:#339af0;">
+                                                            Period {i+1}
+                                                        </div>
+                                                        <div style="font-size:0.9rem;color:#718096;">
+                                                            {cluster["from_date"].strftime("%Y-%m-%d")} to
+                                                            {cluster["till_date"].strftime("%Y-%m-%d")} &bull;
+                                                            {cluster["leave_type"]} &bull; {d_str}
+                                                        </div>
+                                                    </div>
+                                                    <div style="text-align:center;">
+                                                        <div style="font-size:0.9rem;color:#6b46c1;font-weight:500;">
+                                                            Approval Code
+                                                        </div>
+                                                        <div style="font-size:2rem;font-weight:700;color:#553c9a;
+                                                                    letter-spacing:4px;font-family:'Courier New',monospace;">
+                                                            {code}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>""", unsafe_allow_html=True)
+                                    st.balloons()
+                                    st.session_state.generated_codes.clear()
+                                    st.session_state.reset_form_tab1 = True
+                                    time.sleep(2)
+                                    st.rerun()
+
+                            except Exception as e:
+                                st.session_state.submission_in_progress = False
+                                st.markdown(f"""<div class="error-message">
+                                    <strong>Submission Error</strong><br>
+                                    Please try again or contact HR.<br>Error: {str(e)}
+                                </div>""", unsafe_allow_html=True)
+                                log_debug(f"Submission error: {traceback.format_exc()}")
+                        else:
+                            st.session_state.submission_in_progress = False
+                            st.markdown("""<div class="error-message">
+                                <strong>&#x1F4CA; Database Connection Error</strong><br>
+                                Could not connect to database. Please try again later.
+                            </div>""", unsafe_allow_html=True)
+
+
+# ============================================================
+# TAB 2 — APPROVAL PORTAL (Manager / Team Leader)
+# ============================================================
+with tab2:
+    st.markdown("""
+        <div class="section-header">
+            <div class="icon-badge"
+                 style="background:linear-gradient(135deg,#2196f3 0%,#03a9f4 100%);">&#x2705;</div>
+            <div>
+                <h3 style="margin:0;">Manager / Team Leader Approval Portal</h3>
+                <p style="margin:5px 0 0 0;color:#718096;font-size:0.95rem;">
+                    Securely approve or reject leave requests using the approval code
+                </p>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("""
+        <div style="background:linear-gradient(135deg,#e3f2fd 0%,#bbdefb 100%);
+                    padding:1.5rem;border-radius:12px;margin-bottom:2rem;
+                    border:1px solid rgba(33,150,243,0.2);">
+            <div style="display:flex;align-items:center;">
+                <div style="font-size:1.5rem;margin-right:15px;color:#2196f3;">&#x1F512;</div>
+                <div>
+                    <strong style="color:#0d47a1;">Secure Authentication Required</strong><br>
+                    <span style="color:#1565c0;font-size:0.95rem;">
+                        Use the unique 5-character approval code sent to you via email.
+                    </span>
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+    if st.session_state.reset_form_tab2:
+        st.session_state.form_data_tab2     = {"approval_password": "", "action": "Select Decision"}
+        st.session_state.reset_form_tab2     = False
+        st.session_state.submission_in_progress = False
+
+    approval_code_input = st.text_input(
+        "Approval Code",
+        value=st.session_state.form_data_tab2["approval_password"],
+        type="password",
+        placeholder="Enter 5-character code",
+        help="Enter the unique code from the approval email",
+        key="approval_code_input",
+    )
+
+    st.markdown("---")
+    action = st.selectbox("Select Action", ["Select Decision", "Approve", "Reject"],
+                          index=0, label_visibility="collapsed", key="action_select")
+
+    _, btn_col, _ = st.columns([1, 2, 1])
+    with btn_col:
+        disabled = st.session_state.get("submission_in_progress", False)
+        if disabled:
+            st.info("Processing… Please wait.")
+        submit_decision = st.button("Submit Decision", type="primary",
+                                    use_container_width=True, key="submit_decision_button",
+                                    disabled=disabled)
+
+        if submit_decision and not disabled:
+            st.session_state.submission_in_progress = True
+            if not approval_code_input or action == "Select Decision":
+                st.session_state.submission_in_progress = False
+                st.markdown("""<div class="error-message">
+                    <strong>Missing Information</strong><br>
+                    Please enter the approval code and select a decision.
+                </div>""", unsafe_allow_html=True)
+            elif len(approval_code_input) != 5:
+                st.session_state.submission_in_progress = False
+                st.markdown("""<div class="error-message">
+                    <strong>&#x1F511; Invalid Code Format</strong><br>
+                    Please enter the exact 5-character code from the approval email.
+                </div>""", unsafe_allow_html=True)
+            else:
+                with st.spinner("Processing your decision…"):
+                    sheet = setup_google_sheets()
+                    if sheet:
+                        status  = "Approved" if action == "Approve" else "Rejected"
+                        success = update_leave_status(sheet, approval_code_input, status)
+                        if success:
+                            st.session_state.submission_in_progress = False
+                            color  = "#155724" if status == "Approved" else "#721c24"
+                            bg     = "#d4edda"  if status == "Approved" else "#f8d7da"
+                            icon   = "&#x2705;" if status == "Approved" else "&#x274C;"
+                            st.markdown(f"""
+                                <div style="background:{bg};border-left:4px solid {color};
+                                            color:{color};padding:2rem;border-radius:16px;
+                                            margin:2rem 0;text-align:center;">
+                                    <div style="font-size:3rem;margin-bottom:1rem;">{icon}</div>
+                                    <div style="font-size:1.5rem;font-weight:600;margin-bottom:10px;">
+                                        Decision Submitted Successfully!
+                                    </div>
+                                    <div style="margin-bottom:15px;">
+                                        The leave request has been <strong>{status.lower()}</strong>.
+                                    </div>
+                                    <div style="font-size:0.95rem;opacity:0.9;">
+                                        Status email sent to the employee &bull;
+                                        Confirmation email sent to you.
+                                    </div>
+                                </div>""", unsafe_allow_html=True)
+                            st.balloons()
+                            st.session_state.reset_form_tab2 = True
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.session_state.submission_in_progress = False
+                            st.markdown("""<div class="error-message">
+                                <strong>&#x1F510; Authentication Failed</strong><br>
+                                Invalid code or code already used.<br>
+                                Please check your approval code or contact HR for assistance.
+                            </div>""", unsafe_allow_html=True)
+                    else:
+                        st.session_state.submission_in_progress = False
+                        st.markdown("""<div class="error-message">
+                            <strong>&#x1F4CA; Database Connection Error</strong><br>
+                            Could not connect to the database. Please try again later.
+                        </div>""", unsafe_allow_html=True)
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+st.markdown("""
+    <div class="footer">
+        <div style="margin-bottom:1rem;">
+            <strong style="color:#673ab7;">ANULACH FASHION PVT LTD</strong><br>
+            Human Resources Management System
+        </div>
+        <div style="font-size:0.9rem;">
+            &copy; 2026 ANULACH FASHION. All rights reserved.
+        </div>
+    </div>
+""", unsafe_allow_html=True)
