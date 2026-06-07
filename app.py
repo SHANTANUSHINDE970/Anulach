@@ -445,9 +445,8 @@ HR_EMAIL = "hrvolarfashion@gmail.com"
 HR_NAME  = "HR Department"
 
 DEPARTMENTS = [
-    "Accounts and Finance", "Administration", "Business Development", "Content",
-    "E-Commerce", "Factory & Production", "Graphics", "Human Resources", "IT",
-    "Social Media", "Store", "Support Staff", "Warehouse", "SEO",
+    "E-Commerce", "Factory & Production",
+    "Store", "Support Staff", "Warehouse",
 ]
 
 # ============================================================
