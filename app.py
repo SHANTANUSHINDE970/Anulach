@@ -438,23 +438,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# CONSTANTS  — update SUPERIORS with Anulach Fashion contacts
+# CONSTANTS
+# HR email — all leave notifications go here
 # ============================================================
-SUPERIORS = {
-    "Jaya Tahilramani":  "jaya@anulachfashion.com",
-    "Sandip Gawankar":   "sandip@anulachfashion.com",
-    "Tariq Patel":       "tariq@anulachfashion.com",
-    "Sarath Kumar":      "sarath@anulachfashion.com",
-    "Rajeev Thakur":     "rajeev@anulachfashion.com",
-    "Ayushi Jain":       "ayushi@anulachfashion.com",
-    "Akshaya Shinde":    "akshaya@anulachfashion.com",
-    "Vitika Mehta":      "vitika@anulachfashion.com",
-    "Mohammed Tahir":    "tahir@anulachfashion.com",
-    "Hr":                "hr@anulachfashion.com",
-    "Krishna Yadav":     "krishna@anulachfashion.com",
-    "Manish Gupta":      "manish@anulachfashion.com",
-    "Shantanu Shinde":   "shantanu@anulachfashion.com",
-}
+HR_EMAIL = "hrvolarfashion@gmail.com"
+HR_NAME  = "HR Department"
 
 DEPARTMENTS = [
     "Accounts and Finance", "Administration", "Business Development", "Content",
@@ -478,7 +466,7 @@ if "form_data_tab1" not in st.session_state:
     st.session_state.form_data_tab1 = {
         "employee_name": "", "employee_code": "", "employee_email": "",
         "department": "Select Department", "purpose": "",
-        "superior_name": "Select Manager", "is_cluster": False,
+        "is_cluster": False,
     }
 if "form_data_tab2" not in st.session_state:
     st.session_state.form_data_tab2 = {"approval_password": "", "action": "Select Decision"}
@@ -570,10 +558,10 @@ def get_google_credentials():
 
 
 # ============================================================
-# GOOGLE SHEETS SETUP
+# GOOGLE SHEETS SETUP  — sheet name: "Anulach"
 # ============================================================
 def setup_google_sheets():
-    """Connect to Sheet1 of Anulach_Leave_Applications (create headers if needed)."""
+    """Connect to Sheet1 of 'Anulach' (create headers if needed)."""
     try:
         log_debug("Setting up Google Sheets connection...")
         SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -587,7 +575,7 @@ def setup_google_sheets():
         except Exception as e:
             log_debug(f"Error creating credentials: {str(e)}")
             raise e
-        SHEET_NAME = "Anulach_Leave_Applications"   # rename as needed
+        SHEET_NAME = "Anulach"
         try:
             spreadsheet = client.open(SHEET_NAME)
             sheet       = spreadsheet.sheet1
@@ -597,7 +585,7 @@ def setup_google_sheets():
                     headers = [
                         "Submission Date", "Employee Code", "Employee Name", "Department",
                         "Type of Leave", "No of Days", "Purpose of Leave", "From Date",
-                        "To Date", "Superior or Team leader Name", "Superior or Team leader Email",
+                        "To Date", "HR Name", "HR Email",
                         "Status", "Approval Date", "Approval Password", "Cluster (Yes/No)",
                         "Cluster leave Number", "Employee email",
                     ]
@@ -707,7 +695,6 @@ def check_email_configuration():
 # ============================================================
 def create_smtp_connection(sender_email, sender_password):
     server             = None
-    connection_method  = ""
     error_messages     = []
     try:
         log_debug("Trying SMTP_SSL on port 465...")
@@ -819,7 +806,6 @@ def generate_approval_password(sheet=None):
             st.session_state.generated_codes.add(password)
             log_debug(f"Generated unique approval code: {password} (attempt {attempt+1})")
             return password
-    # Fallback
     base36     = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
     timestamp  = int(time.time() * 1000)
     code       = ""
@@ -885,19 +871,17 @@ def add_data_to_sheet(sheet, row_data):
 
 
 # ============================================================
-# LEAVE EMAILS
+# LEAVE EMAILS  — recipient is always HR_EMAIL
 # ============================================================
-def send_approval_email(employee_name, superior_name, superior_email,
-                        employee_email, clusters_data, cluster_codes):
+def send_approval_email(employee_name, employee_email, clusters_data, cluster_codes):
+    """Send leave notification to HR and confirmation to employee."""
     try:
-        log_debug(f"Sending leave approval email to {superior_email}")
+        log_debug(f"Sending leave notification email to HR: {HR_EMAIL}")
         sender_email, sender_password, _ = get_email_credentials()
         if not sender_email or not sender_password:
             st.warning("Email credentials not configured")
             return False
-        if "@" not in superior_email or "." not in superior_email:
-            st.warning(f"Invalid superior email: {superior_email}")
-            return False
+
         try:
             app_url = st.secrets.get("APP_URL", "https://your-anulach-leave-app.streamlit.app/")
         except:
@@ -931,9 +915,10 @@ def send_approval_email(employee_name, superior_name, superior_email,
                 </table>
             </div>"""
 
+        # ── HR notification email ────────────────────────────
         msg = MIMEMultipart("alternative")
-        msg["From"]    = formataddr(("ANULACH FASHION HR", sender_email))
-        msg["To"]      = superior_email
+        msg["From"]    = formataddr(("ANULACH FASHION HR System", sender_email))
+        msg["To"]      = HR_EMAIL
         msg["Subject"] = (f"CLUSTER LEAVE: {employee_name} - {len(clusters_data)} periods"
                           if len(clusters_data) > 1 else f"Leave Approval Required: {employee_name}")
         html_body = f"""
@@ -951,7 +936,7 @@ def send_approval_email(employee_name, superior_name, superior_email,
                 <h2 style="margin:0;">Leave Approval Required</h2>
                 <p style="margin:5px 0 0 0;opacity:0.9;">ANULACH FASHION HR System</p>
             </div>
-            <p>Dear {superior_name},</p>
+            <p>Dear HR Team,</p>
             <div class="info-box">
                 <h3 style="margin-top:0;color:#673ab7;">Employee Information</h3>
                 <p><strong>Employee Name:</strong> {employee_name}</p>
@@ -980,7 +965,7 @@ def send_approval_email(employee_name, superior_name, superior_email,
         </div></body></html>"""
         msg.attach(MIMEText(html_body, "html"))
 
-        # Employee confirmation email
+        # ── Employee confirmation email ───────────────────────
         msg_employee = None
         if employee_email and "@" in employee_email:
             msg_employee = MIMEMultipart("alternative")
@@ -1023,8 +1008,8 @@ def send_approval_email(employee_name, superior_name, superior_email,
                 <p>Dear {employee_name},</p>
                 <div class="info-box">
                     <h3 style="margin-top:0;color:#4caf50;">Application Submitted Successfully</h3>
-                    <p>Your leave application has been submitted and sent to your manager for approval.</p>
-                    <p><strong>Reporting Manager:</strong> {superior_name}</p>
+                    <p>Your leave application has been submitted and sent to HR for approval.</p>
+                    <p><strong>HR Email:</strong> {HR_EMAIL}</p>
                     <p><strong>Purpose:</strong> {clusters_data[0].get("purpose","N/A")}</p>
                     <p><strong>Total Periods:</strong> {len(clusters_data)}</p>
                 </div>
@@ -1039,12 +1024,12 @@ def send_approval_email(employee_name, superior_name, superior_email,
         server, method = create_smtp_connection(sender_email, sender_password)
         if server:
             try:
-                server.sendmail(sender_email, superior_email, msg.as_string())
-                log_debug(f"Approval email sent to {superior_email}")
+                server.sendmail(sender_email, HR_EMAIL, msg.as_string())
+                log_debug(f"Approval email sent to HR: {HR_EMAIL}")
                 if msg_employee and employee_email and "@" in employee_email:
                     try:
                         server.sendmail(sender_email, employee_email, msg_employee.as_string())
-                        log_debug(f"Confirmation email sent to {employee_email}")
+                        log_debug(f"Confirmation email sent to employee: {employee_email}")
                     except Exception as e:
                         log_debug(f"Could not send confirmation to employee: {str(e)}")
                 server.quit()
@@ -1063,7 +1048,7 @@ def send_approval_email(employee_name, superior_name, superior_email,
         return False
 
 
-def send_decision_email_to_employee(employee_name, employee_email, superior_name, status,
+def send_decision_email_to_employee(employee_name, employee_email, status,
                                     cluster_info=None, cluster_number=None, total_clusters=None):
     try:
         sender_email, sender_password, _ = get_email_credentials()
@@ -1116,8 +1101,8 @@ def send_decision_email_to_employee(employee_name, employee_email, superior_name
                       f"""<div style="background:#ffebee;padding:15px;border-radius:8px;margin:15px 0;
                               border-left:4px solid #f44336;">
                             <h4 style="margin-top:0;color:#c62828;">Rejection Notification</h4>
-                            <p>Your leave request has been rejected. Please contact
-                               <strong>{superior_name}</strong> for more information.</p>
+                            <p>Your leave request has been rejected. Please contact HR at
+                               <strong>{HR_EMAIL}</strong> for more information.</p>
                           </div>""")
         html_body = f"""
         <html><head><style>
@@ -1135,7 +1120,7 @@ def send_decision_email_to_employee(employee_name, employee_email, superior_name
                 <h3 style="margin-top:0;color:{status_color};">
                     Your leave request has been {status.lower()}
                 </h3>
-                <p><strong>Decision by:</strong> {superior_name}</p>
+                <p><strong>Decision by:</strong> HR Department</p>
                 <p><strong>Decision Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
                 {cluster_details}
                 {status_msg}
@@ -1163,14 +1148,14 @@ def send_decision_email_to_employee(employee_name, employee_email, superior_name
         return False
 
 
-def send_decision_email_to_superior(employee_name, employee_email, superior_name,
-                                    superior_email, status, approval_password):
+def send_decision_confirmation_to_hr(employee_name, employee_email, status, approval_password):
+    """Send a confirmation back to HR once a decision is recorded."""
     try:
         sender_email, sender_password, _ = get_email_credentials()
         if not sender_email or not sender_password: return False
         msg = MIMEMultipart("alternative")
-        msg["From"]    = formataddr(("ANULACH FASHION HR", sender_email))
-        msg["To"]      = superior_email
+        msg["From"]    = formataddr(("ANULACH FASHION HR System", sender_email))
+        msg["To"]      = HR_EMAIL
         msg["Subject"] = f"Leave Decision Recorded: {employee_name} - {status}"
         html_body = f"""
         <html><head><style>
@@ -1184,13 +1169,14 @@ def send_decision_email_to_superior(employee_name, employee_email, superior_name
         </style></head><body>
         <div class="container">
             <div class="header"><h2 style="margin:0;">Decision Confirmation</h2></div>
-            <p>Dear {superior_name},</p>
+            <p>Dear HR Team,</p>
             <div class="success-box">
-                <p>You have successfully <strong>{status.lower()}</strong> the leave request
-                   for <strong>{employee_name}</strong>.</p>
+                <p>The leave request for <strong>{employee_name}</strong> has been
+                   <strong>{status.lower()}</strong> successfully.</p>
             </div>
             <div class="info-box">
                 <p><strong>Employee:</strong> {employee_name}</p>
+                <p><strong>Employee Email:</strong> {employee_email or "N/A"}</p>
                 <p><strong>Decision:</strong>
                     <span style="color:{'#4caf50' if status=='Approved' else '#f44336'};
                                  font-weight:bold;">{status}</span></p>
@@ -1205,7 +1191,7 @@ def send_decision_email_to_superior(employee_name, employee_email, superior_name
         server, method = create_smtp_connection(sender_email, sender_password)
         if server:
             try:
-                server.sendmail(sender_email, superior_email, msg.as_string())
+                server.sendmail(sender_email, HR_EMAIL, msg.as_string())
                 server.quit()
                 return True
             except Exception as e:
@@ -1214,7 +1200,7 @@ def send_decision_email_to_superior(employee_name, employee_email, superior_name
                 return False
         return False
     except Exception as e:
-        log_debug(f"Error in send_decision_email_to_superior: {traceback.format_exc()}")
+        log_debug(f"Error in send_decision_confirmation_to_hr: {traceback.format_exc()}")
         return False
 
 
@@ -1229,8 +1215,6 @@ def update_leave_status(sheet, approval_password, status):
                 sheet.update_cell(idx + 1, 13, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 employee_name  = row[2]  if len(row) > 2  else ""
                 employee_email = row[16] if len(row) > 16 else ""
-                superior_name  = row[9]  if len(row) > 9  else ""
-                superior_email = row[10] if len(row) > 10 else ""
                 cluster_info   = None
                 if len(row) > 4:
                     cluster_info = {
@@ -1251,12 +1235,10 @@ def update_leave_status(sheet, approval_password, status):
                 log_debug(f"Updated row {idx+1} to status: {status}")
                 if employee_email and "@" in employee_email:
                     send_decision_email_to_employee(employee_name, employee_email,
-                                                    superior_name, status,
-                                                    cluster_info, cluster_number, total_clusters)
-                if superior_email and "@" in superior_email:
-                    send_decision_email_to_superior(employee_name, employee_email,
-                                                    superior_name, superior_email,
-                                                    status, approval_password)
+                                                    status, cluster_info,
+                                                    cluster_number, total_clusters)
+                send_decision_confirmation_to_hr(employee_name, employee_email,
+                                                 status, approval_password)
                 return True
         log_debug("No matching record found for approval code")
         return False
@@ -1304,6 +1286,7 @@ if email_config["configured"]:
     st.sidebar.info(f"**Source:** {email_config['source']}")
     if "password_type" in email_config:
         st.sidebar.info(f"**Password Type:** {email_config['password_type']} ({email_config.get('password_length','?')} chars)")
+    st.sidebar.info(f"**All notifications → HR:** {HR_EMAIL}")
 else:
     st.sidebar.error("Email credentials NOT found")
     st.sidebar.warning(
@@ -1320,7 +1303,7 @@ if st.sidebar.button("Test Google Sheets Connection"):
             sheet = setup_google_sheets()
             if sheet:
                 st.success("Connected!")
-                st.info(f"Sheet: Anulach_Leave_Applications | Rows: {sheet.row_count}")
+                st.info(f"Sheet: Anulach | Rows: {sheet.row_count}")
             else:
                 st.error("Connection failed")
 
@@ -1434,7 +1417,7 @@ with tab1:
                         padding:1.5rem;border-radius:12px;margin-bottom:2rem;">
                 <strong>&#x2705; Email Configuration Working</strong><br>
                 <span style="font-size:0.95rem;">
-                    Email notifications will be sent automatically to managers and employees.
+                    Email notifications will be sent automatically to HR and the employee.
                 </span>
             </div>
         """, unsafe_allow_html=True)
@@ -1456,7 +1439,7 @@ with tab1:
         st.session_state.form_data_tab1 = {
             "employee_name": "", "employee_code": "", "employee_email": "",
             "department": "Select Department", "purpose": "",
-            "superior_name": "Select Manager", "is_cluster": False,
+            "is_cluster": False,
         }
         st.session_state.clusters = [{
             "cluster_number": 1, "leave_type": "Select Type",
@@ -1667,11 +1650,17 @@ with tab1:
         height=120, key="purpose_textarea",
     )
 
-    superior_name = st.selectbox(
-        "Reporting Manager or Team Leader",
-        ["Select Manager"] + list(SUPERIORS.keys()),
-        index=0, key="superior_select",
-    )
+    # ── HR info banner (replaces manager dropdown) ───────────
+    st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#e8f5e9 0%,#c8e6c9 100%);
+                    border-left:4px solid #4caf50;color:#2e7d32;
+                    padding:1.25rem 1.5rem;border-radius:12px;margin:1rem 0 2rem 0;">
+            <strong>&#x1F4E7; Leave Notification</strong><br>
+            <span style="font-size:0.95rem;">
+                Your leave request will be sent directly to <strong>HR</strong> at
+                <strong>{HR_EMAIL}</strong> for review and approval.
+            </span>
+        </div>""", unsafe_allow_html=True)
 
     # ── submit button ────────────────────────────────────────
     _, submit_col, _ = st.columns([1, 2, 1])
@@ -1696,8 +1685,7 @@ with tab1:
             else:
                 errors = []
                 if not all([employee_name, employee_code, employee_email,
-                             department != "Select Department", purpose,
-                             superior_name != "Select Manager"]):
+                             department != "Select Department", purpose]):
                     errors.append("Please complete all required fields")
                 if employee_email and ("@" not in employee_email or "." not in employee_email):
                     errors.append("Please enter a valid email address")
@@ -1716,7 +1704,6 @@ with tab1:
                 else:
                     with st.spinner("Submitting your application…"):
                         submission_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        superior_email  = SUPERIORS[superior_name]
                         sheet = setup_google_sheets()
                         if sheet:
                             try:
@@ -1737,7 +1724,7 @@ with tab1:
                                         purpose.strip(),
                                         cluster["from_date"].strftime("%Y-%m-%d"),
                                         cluster["till_date"].strftime("%Y-%m-%d"),
-                                        superior_name.strip(), superior_email.strip(),
+                                        HR_NAME, HR_EMAIL,
                                         "Pending", "", cluster_codes[i],
                                         "Yes" if is_cluster else "No",
                                         str(i+1) if is_cluster else "",
@@ -1761,8 +1748,8 @@ with tab1:
                                             cc["purpose"]       = purpose
                                             clusters_for_email.append(cc)
                                         email_sent = send_approval_email(
-                                            employee_name, superior_name, superior_email,
-                                            employee_email, clusters_for_email, cluster_codes,
+                                            employee_name, employee_email,
+                                            clusters_for_email, cluster_codes,
                                         )
                                     except Exception as e:
                                         email_error = str(e)
@@ -1781,7 +1768,7 @@ with tab1:
                                                 Application Submitted Successfully!
                                             </div>
                                             <div style="margin-bottom:15px;">
-                                                Your leave request has been sent to your manager for approval.
+                                                Your leave request has been sent to HR for approval.
                                             </div>
                                             <div style="font-size:0.95rem;opacity:0.9;">
                                                 Confirmation email sent to your email address.
@@ -1808,8 +1795,8 @@ with tab1:
                                                 Manual Approval Process
                                             </div>
                                             <p style="color:#718096;margin-bottom:1.5rem;">
-                                                Please share these approval codes with your manager
-                                                <strong>{superior_name}</strong>:
+                                                Please share these approval codes with HR at
+                                                <strong>{HR_EMAIL}</strong>:
                                             </p>
                                         </div>""", unsafe_allow_html=True)
                                     for i, cluster in enumerate(st.session_state.clusters):
@@ -1867,7 +1854,7 @@ with tab1:
 
 
 # ============================================================
-# TAB 2 — APPROVAL PORTAL (Manager / Team Leader)
+# TAB 2 — APPROVAL PORTAL (HR)
 # ============================================================
 with tab2:
     st.markdown("""
@@ -1875,7 +1862,7 @@ with tab2:
             <div class="icon-badge"
                  style="background:linear-gradient(135deg,#2196f3 0%,#03a9f4 100%);">&#x2705;</div>
             <div>
-                <h3 style="margin:0;">Manager / Team Leader Approval Portal</h3>
+                <h3 style="margin:0;">HR Approval Portal</h3>
                 <p style="margin:5px 0 0 0;color:#718096;font-size:0.95rem;">
                     Securely approve or reject leave requests using the approval code
                 </p>
@@ -1891,7 +1878,7 @@ with tab2:
                 <div>
                     <strong style="color:#0d47a1;">Secure Authentication Required</strong><br>
                     <span style="color:#1565c0;font-size:0.95rem;">
-                        Use the unique 5-character approval code sent to you via email.
+                        Use the unique 5-character approval code received in the HR notification email.
                     </span>
                 </div>
             </div>
@@ -1907,7 +1894,7 @@ with tab2:
         value=st.session_state.form_data_tab2["approval_password"],
         type="password",
         placeholder="Enter 5-character code",
-        help="Enter the unique code from the approval email",
+        help="Enter the unique code from the HR notification email",
         key="approval_code_input",
     )
 
@@ -1962,7 +1949,7 @@ with tab2:
                                     </div>
                                     <div style="font-size:0.95rem;opacity:0.9;">
                                         Status email sent to the employee &bull;
-                                        Confirmation email sent to you.
+                                        Confirmation email sent to HR.
                                     </div>
                                 </div>""", unsafe_allow_html=True)
                             st.balloons()
