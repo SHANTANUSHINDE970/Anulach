@@ -444,12 +444,6 @@ st.markdown("""
 HR_NAME  = "Hr"
 HR_EMAIL = "hrvolarfashion@gmail.com"
 
-DEPARTMENTS = [
-    "Accounts and Finance", "Administration", "Business Development", "Content",
-    "E-Commerce", "Factory & Production", "Graphics", "Human Resources", "IT",
-    "Social Media", "Store", "Support Staff", "Warehouse", "SEO",
-]
-
 # ============================================================
 # SESSION STATE INITIALISATION
 # ============================================================
@@ -464,8 +458,8 @@ if "reset_form_tab2" not in st.session_state: st.session_state.reset_form_tab2 =
 
 if "form_data_tab1" not in st.session_state:
     st.session_state.form_data_tab1 = {
-        "employee_name": "", "employee_code": "", "employee_email": "",
-        "department": "Select Department", "purpose": "", "is_cluster": False,
+        "employee_name": "", "employee_code": "",
+        "purpose": "", "is_cluster": False,
     }
 if "form_data_tab2" not in st.session_state:
     st.session_state.form_data_tab2 = {"approval_password": "", "action": "Select Decision"}
@@ -583,11 +577,11 @@ def setup_google_sheets():
             try:
                 if sheet.row_count == 0 or not sheet.row_values(1):
                     headers = [
-                        "Submission Date", "Employee Code", "Employee Name", "Department",
+                        "Submission Date", "Employee Code", "Employee Name",
                         "Type of Leave", "No of Days", "Purpose of Leave", "From Date",
                         "To Date", "Superior or Team leader Name", "Superior or Team leader Email",
                         "Status", "Approval Date", "Approval Password", "Cluster (Yes/No)",
-                        "Cluster leave Number", "Employee email",
+                        "Cluster leave Number",
                     ]
                     sheet.append_row(headers)
                     log_debug("Added headers to sheet")
@@ -695,7 +689,6 @@ def check_email_configuration():
 # ============================================================
 def create_smtp_connection(sender_email, sender_password):
     server             = None
-    connection_method  = ""
     error_messages     = []
     try:
         log_debug("Trying SMTP_SSL on port 465...")
@@ -785,8 +778,8 @@ def get_existing_codes_from_sheet(sheet):
         for idx, row in enumerate(all_records):
             if idx == 0:
                 continue
-            if len(row) > 13 and row[13]:
-                existing_codes.add(row[13])
+            if len(row) > 12 and row[12]:
+                existing_codes.add(row[12])
         log_debug(f"Found {len(existing_codes)} existing codes in sheet")
         return existing_codes
     except Exception as e:
@@ -876,7 +869,7 @@ def add_data_to_sheet(sheet, row_data):
 # LEAVE EMAILS
 # ============================================================
 def send_approval_email(employee_name, superior_name, superior_email,
-                        employee_email, clusters_data, cluster_codes):
+                        clusters_data, cluster_codes):
     try:
         log_debug(f"Sending leave approval email to {superior_email}")
         sender_email, sender_password, _ = get_email_credentials()
@@ -943,9 +936,7 @@ def send_approval_email(employee_name, superior_name, superior_email,
             <div class="info-box">
                 <h3 style="margin-top:0;color:#673ab7;">Employee Information</h3>
                 <p><strong>Employee Name:</strong> {employee_name}</p>
-                <p><strong>Employee Email:</strong> {employee_email or "Not provided"}</p>
                 <p><strong>Employee Code:</strong> {clusters_data[0].get("employee_code","N/A")}</p>
-                <p><strong>Department:</strong> {clusters_data[0].get("department","N/A")}</p>
                 <p><strong>Total Periods:</strong> {len(clusters_data)}</p>
                 <p><strong>Purpose:</strong> {clusters_data[0].get("purpose","N/A")}</p>
             </div>
@@ -968,73 +959,11 @@ def send_approval_email(employee_name, superior_name, superior_email,
         </div></body></html>"""
         msg.attach(MIMEText(html_body, "html"))
 
-        # Employee confirmation email
-        msg_employee = None
-        if employee_email and "@" in employee_email:
-            msg_employee = MIMEMultipart("alternative")
-            msg_employee["From"]    = formataddr(("ANULACH FASHION HR", sender_email))
-            msg_employee["To"]      = employee_email
-            msg_employee["Subject"] = (f"Leave Application Submitted: {len(clusters_data)} periods"
-                                       if len(clusters_data) > 1 else "Leave Application Submitted Successfully")
-            emp_clusters_html = ""
-            for i, cluster in enumerate(clusters_data):
-                days         = calculate_days(cluster["from_date"], cluster["till_date"], cluster["leave_type"])
-                days_display = ("N/A" if cluster["leave_type"] == "Early Exit"
-                                else ("0.5 day" if cluster["leave_type"] == "Half Day"
-                                      else f"{days} days"))
-                emp_clusters_html += f"""
-                <div style="background:{'#f8f9ff' if i%2==0 else '#f0f2ff'};padding:15px;border-radius:8px;
-                            margin:10px 0;border-left:4px solid #4dabf7;">
-                    <h4 style="margin-top:0;color:#339af0;">Period {i+1}</h4>
-                    <table style="width:100%;border-collapse:collapse;">
-                        <tr><td style="padding:5px;width:40%;"><strong>Leave Type:</strong></td>
-                            <td style="padding:5px;">{cluster["leave_type"]}</td></tr>
-                        <tr><td style="padding:5px;"><strong>From:</strong></td>
-                            <td style="padding:5px;">{cluster["from_date"].strftime("%Y-%m-%d")}</td></tr>
-                        <tr><td style="padding:5px;"><strong>To:</strong></td>
-                            <td style="padding:5px;">{cluster["till_date"].strftime("%Y-%m-%d")}</td></tr>
-                        <tr><td style="padding:5px;"><strong>Duration:</strong></td>
-                            <td style="padding:5px;">{days_display}</td></tr>
-                    </table>
-                </div>"""
-            html_emp = f"""
-            <html><head><style>
-            body{{font-family:Arial,sans-serif;line-height:1.6;}}
-            .container{{max-width:700px;margin:0 auto;padding:20px;}}
-            .header{{background:linear-gradient(135deg,#4caf50 0%,#2e7d32 100%);color:white;
-                     padding:20px;border-radius:10px;text-align:center;}}
-            .info-box{{background:#f8f9ff;padding:20px;border-radius:10px;margin:20px 0;border:1px solid #e2e8f0;}}
-            .footer{{color:#666;font-size:12px;margin-top:30px;padding-top:15px;border-top:1px solid #eee;}}
-            </style></head><body>
-            <div class="container">
-                <div class="header"><h2 style="margin:0;">Leave Application Confirmation</h2></div>
-                <p>Dear {employee_name},</p>
-                <div class="info-box">
-                    <h3 style="margin-top:0;color:#4caf50;">Application Submitted Successfully</h3>
-                    <p>Your leave application has been submitted and sent to your manager for approval.</p>
-                    <p><strong>Reporting Manager:</strong> {superior_name}</p>
-                    <p><strong>Purpose:</strong> {clusters_data[0].get("purpose","N/A")}</p>
-                    <p><strong>Total Periods:</strong> {len(clusters_data)}</p>
-                </div>
-                <h3 style="color:#339af0;">Your Leave Periods</h3>
-                {emp_clusters_html}
-                <div class="footer">
-                    ANULACH FASHION PVT LTD - HR Department<br>{sender_email}
-                </div>
-            </div></body></html>"""
-            msg_employee.attach(MIMEText(html_emp, "html"))
-
         server, method = create_smtp_connection(sender_email, sender_password)
         if server:
             try:
                 server.sendmail(sender_email, superior_email, msg.as_string())
                 log_debug(f"Approval email sent to {superior_email}")
-                if msg_employee and employee_email and "@" in employee_email:
-                    try:
-                        server.sendmail(sender_email, employee_email, msg_employee.as_string())
-                        log_debug(f"Confirmation email sent to {employee_email}")
-                    except Exception as e:
-                        log_debug(f"Could not send confirmation to employee: {str(e)}")
                 server.quit()
                 return True
             except Exception as e:
@@ -1051,107 +980,7 @@ def send_approval_email(employee_name, superior_name, superior_email,
         return False
 
 
-def send_decision_email_to_employee(employee_name, employee_email, superior_name, status,
-                                    cluster_info=None, cluster_number=None, total_clusters=None):
-    try:
-        sender_email, sender_password, _ = get_email_credentials()
-        if not sender_email or not sender_password: return False
-        if not employee_email or "@" not in employee_email: return False
-        msg = MIMEMultipart("alternative")
-        msg["From"] = formataddr(("ANULACH FASHION HR", sender_email))
-        msg["To"]   = employee_email
-        if cluster_number and total_clusters and total_clusters > 1:
-            msg["Subject"] = f"Leave Period {cluster_number}/{total_clusters} {status} - {employee_name}"
-        else:
-            msg["Subject"] = f"Leave Application {status} - {employee_name}"
-        status_color = "#4caf50" if status == "Approved" else "#f44336"
-        status_bg    = "#e8f5e9" if status == "Approved" else "#ffebee"
-        cluster_details = ""
-        if cluster_info:
-            fd = (datetime.strptime(cluster_info["from_date"], "%Y-%m-%d").date()
-                  if isinstance(cluster_info["from_date"], str) else cluster_info["from_date"])
-            td = (datetime.strptime(cluster_info["till_date"], "%Y-%m-%d").date()
-                  if isinstance(cluster_info["till_date"], str) else cluster_info["till_date"])
-            days         = calculate_days(fd, td, cluster_info["leave_type"])
-            days_display = ("N/A" if cluster_info["leave_type"] == "Early Exit"
-                            else ("0.5 day" if cluster_info["leave_type"] == "Half Day"
-                                  else f"{days} days"))
-            fd_str = fd.strftime("%Y-%m-%d") if hasattr(fd, "strftime") else cluster_info["from_date"]
-            td_str = td.strftime("%Y-%m-%d") if hasattr(td, "strftime") else cluster_info["till_date"]
-            label  = (f"Period {cluster_number}"
-                      if cluster_number and total_clusters and total_clusters > 1 else "Leave Period")
-            cluster_details = f"""
-            <div style="background:#f8f9ff;padding:15px;border-radius:8px;margin:15px 0;
-                        border-left:4px solid #4dabf7;">
-                <h4 style="margin-top:0;color:#339af0;">{label} Details</h4>
-                <table style="width:100%;border-collapse:collapse;">
-                    <tr><td style="padding:5px;width:40%;"><strong>Leave Type:</strong></td>
-                        <td style="padding:5px;">{cluster_info["leave_type"]}</td></tr>
-                    <tr><td style="padding:5px;"><strong>From:</strong></td>
-                        <td style="padding:5px;">{fd_str}</td></tr>
-                    <tr><td style="padding:5px;"><strong>To:</strong></td>
-                        <td style="padding:5px;">{td_str}</td></tr>
-                    <tr><td style="padding:5px;"><strong>Duration:</strong></td>
-                        <td style="padding:5px;">{days_display}</td></tr>
-                </table>
-            </div>"""
-        status_msg = ("""<div style="background:#e8f5e9;padding:15px;border-radius:8px;margin:15px 0;
-                            border-left:4px solid #4caf50;">
-                          <h4 style="margin-top:0;color:#2e7d32;">Approval Confirmation</h4>
-                          <p>Your leave has been approved. You can proceed with your leave plans.</p>
-                        </div>"""
-                      if status == "Approved" else
-                      f"""<div style="background:#ffebee;padding:15px;border-radius:8px;margin:15px 0;
-                              border-left:4px solid #f44336;">
-                            <h4 style="margin-top:0;color:#c62828;">Rejection Notification</h4>
-                            <p>Your leave request has been rejected. Please contact
-                               <strong>{superior_name}</strong> for more information.</p>
-                          </div>""")
-        html_body = f"""
-        <html><head><style>
-        body{{font-family:Arial,sans-serif;line-height:1.6;}}
-        .container{{max-width:700px;margin:0 auto;padding:20px;}}
-        .header{{background:linear-gradient(135deg,{status_color} 0%,{status_color}80 100%);color:white;
-                 padding:20px;border-radius:10px;text-align:center;}}
-        .info-box{{background:{status_bg};padding:20px;border-radius:10px;margin:20px 0;}}
-        .footer{{color:#666;font-size:12px;margin-top:30px;padding-top:15px;border-top:1px solid #eee;}}
-        </style></head><body>
-        <div class="container">
-            <div class="header"><h2 style="margin:0;">Leave Application {status}</h2></div>
-            <p>Dear {employee_name},</p>
-            <div class="info-box">
-                <h3 style="margin-top:0;color:{status_color};">
-                    Your leave request has been {status.lower()}
-                </h3>
-                <p><strong>Decision by:</strong> {superior_name}</p>
-                <p><strong>Decision Date:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
-                {cluster_details}
-                {status_msg}
-            </div>
-            <div class="footer">
-                ANULACH FASHION PVT LTD - HR Department<br>{sender_email}
-            </div>
-        </div></body></html>"""
-        msg.attach(MIMEText(html_body, "html"))
-        server, method = create_smtp_connection(sender_email, sender_password)
-        if server:
-            try:
-                server.sendmail(sender_email, employee_email, msg.as_string())
-                server.quit()
-                log_debug(f"Decision email sent to employee: {employee_email}")
-                return True
-            except Exception as e:
-                try: server.quit()
-                except: pass
-                log_debug(f"Failed to send decision email: {str(e)}")
-                return False
-        return False
-    except Exception as e:
-        log_debug(f"Error in send_decision_email_to_employee: {traceback.format_exc()}")
-        return False
-
-
-def send_decision_email_to_superior(employee_name, employee_email, superior_name,
+def send_decision_email_to_superior(employee_name, superior_name,
                                     superior_email, status, approval_password):
     try:
         sender_email, sender_password, _ = get_email_credentials()
@@ -1212,39 +1041,17 @@ def update_leave_status(sheet, approval_password, status):
         for idx, row in enumerate(all_records):
             if idx == 0:
                 continue
-            if len(row) > 13 and row[13] == approval_password:
-                sheet.update_cell(idx + 1, 12, status)
-                sheet.update_cell(idx + 1, 13, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            # Approval Password is now column 13 (index 12)
+            if len(row) > 12 and row[12] == approval_password:
+                sheet.update_cell(idx + 1, 11, status)
+                sheet.update_cell(idx + 1, 12, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 employee_name  = row[2]  if len(row) > 2  else ""
-                employee_email = row[16] if len(row) > 16 else ""
-                superior_name  = row[9]  if len(row) > 9  else ""
-                superior_email = row[10] if len(row) > 10 else ""
-                cluster_info   = None
-                if len(row) > 4:
-                    cluster_info = {
-                        "leave_type": row[4] if len(row) > 4 else "",
-                        "from_date":  row[7] if len(row) > 7 else "",
-                        "till_date":  row[8] if len(row) > 8 else "",
-                    }
-                is_cluster     = row[14] if len(row) > 14 else "No"
-                cluster_number = None
-                if is_cluster == "Yes" and len(row) > 15:
-                    cluster_number = row[15] if row[15] else None
-                total_clusters = None
-                if is_cluster == "Yes" and employee_name:
-                    total_clusters = sum(
-                        1 for r in all_records[1:]
-                        if len(r) > 2 and r[2] == employee_name and len(r) > 14 and r[14] == "Yes"
-                    )
+                superior_name  = row[8]  if len(row) > 8  else ""
+                superior_email = row[9]  if len(row) > 9  else ""
                 log_debug(f"Updated row {idx+1} to status: {status}")
-                if employee_email and "@" in employee_email:
-                    send_decision_email_to_employee(employee_name, employee_email,
-                                                    superior_name, status,
-                                                    cluster_info, cluster_number, total_clusters)
                 if superior_email and "@" in superior_email:
-                    send_decision_email_to_superior(employee_name, employee_email,
-                                                    superior_name, superior_email,
-                                                    status, approval_password)
+                    send_decision_email_to_superior(employee_name, superior_name,
+                                                    superior_email, status, approval_password)
                 return True
         log_debug("No matching record found for approval code")
         return False
@@ -1442,42 +1249,34 @@ with tab1:
     # ── reset guard ──────────────────────────────────────────
     if st.session_state.reset_form_tab1:
         st.session_state.form_data_tab1 = {
-            "employee_name": "", "employee_code": "", "employee_email": "",
-            "department": "Select Department", "purpose": "", "is_cluster": False,
+            "employee_name": "", "employee_code": "",
+            "purpose": "", "is_cluster": False,
         }
         st.session_state.clusters = [{
             "cluster_number": 1, "leave_type": "Select Type",
             "from_date": datetime.now().date(), "till_date": datetime.now().date(),
             "approval_code": "",
         }]
-        st.session_state.cluster_codes        = {}
-        st.session_state.reset_form_tab1      = False
+        st.session_state.cluster_codes          = {}
+        st.session_state.reset_form_tab1        = False
         st.session_state.submission_in_progress = False
         st.session_state.submission_completed   = True
 
     # ── employee info ────────────────────────────────────────
-    col1, col2, col3 = st.columns([1, 1, 1], gap="large")
+    col1, col2 = st.columns([1, 1], gap="large")
     with col1:
-        employee_name  = st.text_input("Full Name", value=st.session_state.form_data_tab1["employee_name"],
-                                       placeholder="Enter your full name", key="employee_name_input")
+        employee_name = st.text_input("Full Name", value=st.session_state.form_data_tab1["employee_name"],
+                                      placeholder="Enter your full name", key="employee_name_input")
     with col2:
-        employee_code  = st.text_input("Employee ID", value=st.session_state.form_data_tab1["employee_code"],
-                                       placeholder="e.g., AF-EMP-001", key="employee_code_input")
-    with col3:
-        employee_email = st.text_input("Employee Email", value=st.session_state.form_data_tab1["employee_email"],
-                                       placeholder="your.email@company.com", key="employee_email_input")
+        employee_code = st.text_input("Employee ID", value=st.session_state.form_data_tab1["employee_code"],
+                                      placeholder="e.g., AF-EMP-001", key="employee_code_input")
 
-    col4, col5 = st.columns([1, 1], gap="large")
-    with col4:
-        department = st.selectbox("Department", ["Select Department"] + DEPARTMENTS, index=0,
-                                  key="department_select")
-    with col5:
-        is_cluster = st.checkbox(
-            "Is this a Cluster Holiday? (Multiple leave periods)",
-            value=st.session_state.form_data_tab1["is_cluster"],
-            help="Check this if you need to apply for multiple separate leave periods",
-            key="is_cluster_checkbox",
-        )
+    is_cluster = st.checkbox(
+        "Is this a Cluster Holiday? (Multiple leave periods)",
+        value=st.session_state.form_data_tab1["is_cluster"],
+        help="Check this if you need to apply for multiple separate leave periods",
+        key="is_cluster_checkbox",
+    )
 
     # ── cluster / single leave ───────────────────────────────
     if is_cluster:
@@ -1654,7 +1453,6 @@ with tab1:
         height=120, key="purpose_textarea",
     )
 
-
     # ── submit button ────────────────────────────────────────
     _, submit_col, _ = st.columns([1, 2, 1])
     with submit_col:
@@ -1677,11 +1475,8 @@ with tab1:
                 </div>""", unsafe_allow_html=True)
             else:
                 errors = []
-                if not all([employee_name, employee_code, employee_email,
-                             department != "Select Department", purpose]):
-                    errors.append("Please complete all required fields")
-                if employee_email and ("@" not in employee_email or "." not in employee_email):
-                    errors.append("Please enter a valid email address")
+                if not all([employee_name, employee_code, purpose]):
+                    errors.append("Please complete all required fields (Name, Employee ID, Purpose)")
                 for i, cluster in enumerate(st.session_state.clusters):
                     if cluster["leave_type"] == "Select Type":
                         errors.append(f"Please select leave type for Period {i+1}")
@@ -1709,24 +1504,32 @@ with tab1:
                                     log_debug(f"Code for period {i+1}: {cluster_codes[i]}")
 
                                 # Write each period to sheet
+                                # Columns: Submission Date | Employee Code | Employee Name |
+                                #          Type of Leave | No of Days | Purpose of Leave |
+                                #          From Date | To Date | Superior Name | Superior Email |
+                                #          Status | Approval Date | Approval Password |
+                                #          Cluster (Yes/No) | Cluster leave Number
                                 for i, cluster in enumerate(st.session_state.clusters):
                                     days = calculate_days(cluster["from_date"], cluster["till_date"],
                                                           cluster["leave_type"])
                                     row_data = [
-                                        submission_date, employee_code.strip(), employee_name.strip(),
-                                        department.strip(), cluster["leave_type"].strip(),
+                                        submission_date,
+                                        employee_code.strip(),
+                                        employee_name.strip(),
+                                        cluster["leave_type"].strip(),
                                         str(days) if days is not None else "",
                                         purpose.strip(),
                                         cluster["from_date"].strftime("%Y-%m-%d"),
                                         cluster["till_date"].strftime("%Y-%m-%d"),
-                                        superior_name.strip(), superior_email.strip(),
-                                        "Pending", "", cluster_codes[i],
+                                        superior_name.strip(),
+                                        superior_email.strip(),
+                                        "Pending",
+                                        "",
+                                        cluster_codes[i],
                                         "Yes" if is_cluster else "No",
                                         str(i+1) if is_cluster else "",
-                                        employee_email.strip(),
                                     ]
-                                    while len(row_data) < 17: row_data.append("")
-                                    row_data = [str(x) if x is not None else "" for x in row_data[:17]]
+                                    row_data = [str(x) if x is not None else "" for x in row_data]
                                     if not add_data_to_sheet(sheet, row_data):
                                         raise Exception(f"Failed to write to Google Sheets for period {i+1}")
 
@@ -1739,12 +1542,11 @@ with tab1:
                                         for c in st.session_state.clusters:
                                             cc = c.copy()
                                             cc["employee_code"] = employee_code
-                                            cc["department"]    = department
                                             cc["purpose"]       = purpose
                                             clusters_for_email.append(cc)
                                         email_sent = send_approval_email(
                                             employee_name, superior_name, superior_email,
-                                            employee_email, clusters_for_email, cluster_codes,
+                                            clusters_for_email, cluster_codes,
                                         )
                                     except Exception as e:
                                         email_error = str(e)
@@ -1763,10 +1565,7 @@ with tab1:
                                                 Application Submitted Successfully!
                                             </div>
                                             <div style="margin-bottom:15px;">
-                                                Your leave request has been sent to your manager for approval.
-                                            </div>
-                                            <div style="font-size:0.95rem;opacity:0.9;">
-                                                Confirmation email sent to your email address.
+                                                Your leave request has been sent to HR for approval.
                                             </div>
                                         </div>""", unsafe_allow_html=True)
                                     st.balloons()
@@ -1849,7 +1648,7 @@ with tab1:
 
 
 # ============================================================
-# TAB 2 — APPROVAL PORTAL (Manager / Team Leader)
+# TAB 2 — APPROVAL PORTAL (HR)
 # ============================================================
 with tab2:
     st.markdown("""
@@ -1857,7 +1656,7 @@ with tab2:
             <div class="icon-badge"
                  style="background:linear-gradient(135deg,#2196f3 0%,#03a9f4 100%);">&#x2705;</div>
             <div>
-                <h3 style="margin:0;">Manager / Team Leader Approval Portal</h3>
+                <h3 style="margin:0;">HR Approval Portal</h3>
                 <p style="margin:5px 0 0 0;color:#718096;font-size:0.95rem;">
                     Securely approve or reject leave requests using the approval code
                 </p>
@@ -1880,8 +1679,8 @@ with tab2:
         </div>""", unsafe_allow_html=True)
 
     if st.session_state.reset_form_tab2:
-        st.session_state.form_data_tab2     = {"approval_password": "", "action": "Select Decision"}
-        st.session_state.reset_form_tab2     = False
+        st.session_state.form_data_tab2        = {"approval_password": "", "action": "Select Decision"}
+        st.session_state.reset_form_tab2        = False
         st.session_state.submission_in_progress = False
 
     approval_code_input = st.text_input(
@@ -1943,8 +1742,7 @@ with tab2:
                                         The leave request has been <strong>{status.lower()}</strong>.
                                     </div>
                                     <div style="font-size:0.95rem;opacity:0.9;">
-                                        Status email sent to the employee &bull;
-                                        Confirmation email sent to you.
+                                        Confirmation email sent to HR.
                                     </div>
                                 </div>""", unsafe_allow_html=True)
                             st.balloons()
