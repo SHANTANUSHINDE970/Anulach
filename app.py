@@ -442,7 +442,7 @@ st.markdown("""
 # ============================================================
 # All leave approvals go directly to HR
 HR_NAME  = "Hr"
-HR_EMAIL = "hrvolarfashion@gmail.com"
+HR_EMAIL = "hr@anulachfashion.com"
 
 # ============================================================
 # SESSION STATE INITIALISATION
